@@ -63,17 +63,3 @@ jobs:
             echo "::error::binary exceeds 25 MB budget"
             exit 1
           fi
-
-  code-review:
-    name: code-review · LLM
-    runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: falconiere/toolu-ghactions/code-review@v1
-        with:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          MODEL: 'minimax/minimax-m3'

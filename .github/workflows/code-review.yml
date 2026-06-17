@@ -1,0 +1,18 @@
+name: code-review
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  code-review:
+    name: code-review · LLM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: falconiere/toolu-ghactions/code-review@v1
+        with:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MODEL: 'minimax/minimax-m3'
