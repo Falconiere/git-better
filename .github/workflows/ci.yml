@@ -12,8 +12,8 @@ env:
 
 jobs:
   test:
-    name: test · macOS
-    runs-on: macos-latest
+    name: test · ubuntu (linux x86_64)
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,7 @@ jobs:
 
   size:
     name: release binary size
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     needs: test
     steps:
       - uses: actions/checkout@v4
@@ -57,7 +57,7 @@ jobs:
         run: cargo build --release --verbose
       - name: Check size
         run: |
-          SIZE=$(stat -f %z target/release/gb)
+          SIZE=$(stat -c %s target/release/gb)
           echo "binary size: $SIZE bytes"
           if [ "$SIZE" -gt 26214400 ]; then
             echo "::error::binary exceeds 25 MB budget"
