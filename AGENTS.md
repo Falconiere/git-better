@@ -13,8 +13,10 @@ prettification and `--better` JSON output.
 ## Tech stack
 
 - **Language**: Rust 2021 edition, MSRV 1.80 (for `std::sync::LazyLock`).
-- **Platform**: macOS only. CI runs on `macos-latest`. Do not add Linux /
-  Windows / `*-unknown-linux-*` / `*-pc-windows-*` targets without asking.
+- **Platform**: macOS only — the project is intended for macOS users.
+  CI runs on `ubuntu-latest` (cheaper; the binary is a static Rust
+  artifact, no platform-specific syscalls). Do not add Windows /
+  `*-pc-windows-*` / BSD targets without asking.
 - **Git backend**: shell out to the `git` binary. **Never** add `libgit2` /
   `gitoxide` / `nodegit` — the user explicitly chose shell-out.
 - **CLI parsing**: `clap` with the `derive` feature.
