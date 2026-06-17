@@ -1,6 +1,6 @@
 # git-better
 
-> Token-lean git companion for humans and LLM agents. **macOS only.**
+> Token-lean git companion for humans and LLM agents. **macOS arm64 (Apple Silicon) only.**
 
 `gb` is a drop-in `git` wrapper that:
 

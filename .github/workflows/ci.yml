@@ -12,7 +12,7 @@ env:
 
 jobs:
   test:
-    name: test · ubuntu (linux x86_64)
+    name: test · ubuntu (CI; release targets aarch64-apple-darwin)
     runs-on: ubuntu-latest
 
     steps:
