@@ -1,8 +1,8 @@
 [package]
 name = "git-better"
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.80"
+edition = "2024"
+rust-version = "1.85"
 description = "Token-lean git companion for humans and LLM agents"
 license = "MIT"
 repository = "https://github.com/Falconiere/git-better"

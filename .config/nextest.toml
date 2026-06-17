@@ -1,0 +1,6 @@
+[store]
+dir = "target/nextest"
+
+# Default: full parallelism. Single-crate project, no DB contention concerns.
+[profile.default]
+test-threads = "num-cpus"

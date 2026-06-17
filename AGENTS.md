@@ -12,7 +12,7 @@ prettification and `--better` JSON output.
 
 ## Tech stack
 
-- **Language**: Rust 2021 edition, MSRV 1.80 (for `std::sync::LazyLock`).
+- **Language**: Rust 2024 edition, MSRV 1.85 (for `std::sync::LazyLock`).
 - **Platform**: **macOS arm64 (Apple Silicon) only** — this is a
   single-machine personal tool for the user. Release artifacts target
   `aarch64-apple-darwin`. CI runs on `ubuntu-latest` (cheaper; the
