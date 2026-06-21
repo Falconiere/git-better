@@ -9,8 +9,12 @@ pub struct Theme {
 
 impl Theme {
   pub fn detect() -> Self {
+    Self::detect_with(false)
+  }
+
+  pub fn detect_with(force_plain: bool) -> Self {
     Self {
-      enabled: !should_disable_color(),
+      enabled: !force_plain && !should_disable_color(),
     }
   }
 

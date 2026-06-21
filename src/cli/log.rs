@@ -7,6 +7,9 @@ use crate::git::{commit, porcelain, proc};
 use crate::output::{OutputMode, better, human};
 
 pub fn run(args: LogArgs, mode: OutputMode) -> Result<()> {
+  if args.budget.is_some() && !mode.is_better() {
+    anyhow::bail!("--budget only applies with --better");
+  }
   if !args.passthrough.is_empty() {
     let mut all = vec!["log".to_string()];
     all.extend(args.passthrough);
@@ -42,87 +45,102 @@ fn run_pretty(_args: &LogArgs, mode: OutputMode) -> Result<()> {
   Ok(())
 }
 
+fn collect_by_type_author(
+  records: &[commit::CommitRecord],
+) -> (BTreeMap<String, u64>, BTreeMap<String, u64>) {
+  let mut by_type: BTreeMap<String, u64> = BTreeMap::new();
+  let mut by_author: BTreeMap<String, u64> = BTreeMap::new();
+  for r in records {
+    if let Some(t) = &r.conventional_type {
+      *by_type.entry(t.clone()).or_insert(0) += 1;
+    }
+    *by_author.entry(r.author_name.clone()).or_insert(0) += 1;
+  }
+  (by_type, by_author)
+}
+
 fn run_better(args: LogArgs, mode: OutputMode) -> Result<()> {
   let n: usize = if args.story { 50 } else { 20 };
   let raw = proc::run_git(&build_log_format(n))?;
   let records = porcelain::parse_log_format(&raw);
 
   if args.story {
-    let (branch, base_ref, base_display) = detect_branch_and_base()
-      .unwrap_or_else(|| ("(current)".into(), "HEAD~1".into(), "(base)".into()));
-    let total = records.len() as u64;
-    let mut by_type: BTreeMap<String, u64> = BTreeMap::new();
-    let mut by_author: BTreeMap<String, u64> = BTreeMap::new();
-    let first_subject = records
-      .first()
-      .map(|r| r.subject.clone())
-      .unwrap_or_default();
-    let pr = records.iter().find_map(|r| r.pr_number);
-
-    for r in &records {
-      if let Some(t) = &r.conventional_type {
-        *by_type.entry(t.clone()).or_insert(0) += 1;
-      }
-      *by_author.entry(r.author_name.clone()).or_insert(0) += 1;
-    }
-
-    let (files_changed, net_added, net_removed) = diff_stats_for(&base_ref);
-
-    if mode.is_better() {
-      let env = better::envelope_with_hints(
-        "log",
-        json!({
-            "branch": branch,
-            "base": base_display,
-            "story": format!(
-                "{} commit(s) · {} file(s) · +{} -{}",
-                total, files_changed, net_added, net_removed
-            ),
-            "groups": group_by_pr(&records),
-            "by_type": by_type,
-            "by_author": by_author,
-            "first_subject": first_subject,
-            "pr": pr,
-        }),
-        vec![
-          "use `gb log` for a quick pretty oneline list".to_string(),
-          "use `gb log -n 5` to scope the size".to_string(),
-        ],
-        json!({"duration_ms": 0, "bytes": 0, "budget": args.budget}),
-      )?;
-      println!("{env}");
-      return Ok(());
-    }
-
-    human::print_log_story(
-      &branch,
-      &base_display,
-      total,
-      &by_type,
-      files_changed,
-      net_added,
-      net_removed,
-      &first_subject,
-      pr,
-      mode,
-    );
-    return Ok(());
+    return run_story(&args, &records, mode);
   }
 
-  let mut by_type: BTreeMap<String, u64> = BTreeMap::new();
-  let mut by_author: BTreeMap<String, u64> = BTreeMap::new();
-  for r in &records {
-    if let Some(t) = &r.conventional_type {
-      *by_type.entry(t.clone()).or_insert(0) += 1;
-    }
-    *by_author.entry(r.author_name.clone()).or_insert(0) += 1;
+  print_plain_log_envelope(&args, &records)
+}
+
+fn print_story_envelope(
+  args: &LogArgs,
+  records: &[commit::CommitRecord],
+  story: &human::LogStory<'_>,
+  by_author: &BTreeMap<String, u64>,
+) -> Result<()> {
+  let env = better::envelope_with_hints(
+    "log",
+    json!({
+        "branch": story.branch,
+        "base": story.base,
+        "story": format!(
+            "{} commit(s) · {} file(s) · +{} -{}",
+            story.total, story.files_changed, story.net_added, story.net_removed
+        ),
+        "groups": group_by_pr(records),
+        "by_type": story.by_type,
+        "by_author": by_author,
+        "first_subject": story.first_subject,
+        "pr": story.pr,
+    }),
+    vec![
+      "use `gb log` for a quick pretty oneline list".to_string(),
+      "use `gb log -n 5` to scope the size".to_string(),
+    ],
+    json!({"duration_ms": 0, "bytes": 0, "budget": args.budget}),
+  )?;
+  println!("{env}");
+  Ok(())
+}
+
+fn run_story(args: &LogArgs, records: &[commit::CommitRecord], mode: OutputMode) -> Result<()> {
+  let (branch, base_ref, base_display) = detect_branch_and_base()
+    .unwrap_or_else(|| ("(current)".into(), "HEAD~1".into(), "(base)".into()));
+  let total = records.len() as u64;
+  let (by_type, by_author) = collect_by_type_author(records);
+  let first_subject = records
+    .first()
+    .map(|r| r.subject.clone())
+    .unwrap_or_default();
+  let pr = records.iter().find_map(|r| r.pr_number);
+  let (files_changed, net_added, net_removed) = diff_stats_for(&base_ref);
+
+  let story = human::LogStory {
+    branch: &branch,
+    base: &base_display,
+    total,
+    by_type: &by_type,
+    files_changed,
+    net_added,
+    net_removed,
+    first_subject: &first_subject,
+    pr,
+  };
+
+  if mode.is_better() {
+    return print_story_envelope(args, records, &story, &by_author);
   }
 
+  human::print_log_story(&story, mode);
+  Ok(())
+}
+
+fn print_plain_log_envelope(args: &LogArgs, records: &[commit::CommitRecord]) -> Result<()> {
+  let (by_type, by_author) = collect_by_type_author(records);
   let env = better::envelope_with_hints(
     "log",
     json!({
         "commits": records,
-        "groups": group_by_pr(&records),
+        "groups": group_by_pr(records),
         "by_type": by_type,
         "by_author": by_author,
         "total": records.len(),

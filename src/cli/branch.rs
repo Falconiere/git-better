@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use super::BranchArgs;
 use crate::git::proc;
-use crate::output::{OutputMode, better, theme};
+use crate::output::{OutputMode, better, icons, theme};
 
 #[derive(Debug, Clone, serde::Serialize)]
 struct BranchRow {
@@ -18,6 +18,7 @@ struct BranchRow {
   stale: bool,
 }
 
+/// Dispatch `gb branch`: passthrough, structured `--better`, or the pretty list.
 pub fn run(args: BranchArgs, mode: OutputMode) -> Result<()> {
   if !args.passthrough.is_empty() {
     let mut all = vec!["branch".to_string()];
@@ -50,44 +51,50 @@ fn collect_rows() -> Result<Vec<BranchRow>> {
     ])?;
   let mut rows = Vec::new();
   for line in format_out.lines() {
-    if line.is_empty() {
-      continue;
+    if let Some(row) = parse_branch_row(line, current.as_ref()) {
+      rows.push(row);
     }
-    let parts: Vec<&str> = line.split('\0').collect();
-    if parts.len() < 5 {
-      continue;
-    }
-    let name = parts[0].to_string();
-    let upstream = if parts[1].is_empty() {
-      None
-    } else {
-      Some(parts[1].to_string())
-    };
-    let (ahead, behind) = parse_track(parts[2]);
-    let last_rel = if parts[3] == "-" {
-      None
-    } else {
-      Some(parts[3].to_string())
-    };
-    let last_iso = if parts[4].is_empty() {
-      None
-    } else {
-      Some(parts[4].to_string())
-    };
-    let is_current = Some(&name) == current.as_ref();
-    let stale = last_rel.as_deref().map(is_stale).unwrap_or(false);
-    rows.push(BranchRow {
-      name,
-      current: is_current,
-      upstream,
-      ahead,
-      behind,
-      last_commit_relative: last_rel,
-      last_commit_iso: last_iso,
-      stale,
-    });
   }
   Ok(rows)
+}
+
+fn parse_branch_row(line: &str, current: Option<&String>) -> Option<BranchRow> {
+  if line.is_empty() {
+    return None;
+  }
+  let parts: Vec<&str> = line.split('\0').collect();
+  if parts.len() < 5 {
+    return None;
+  }
+  let name = parts[0].to_string();
+  let upstream = if parts[1].is_empty() {
+    None
+  } else {
+    Some(parts[1].to_string())
+  };
+  let (ahead, behind) = parse_track(parts[2]);
+  let last_rel = if parts[3] == "-" {
+    None
+  } else {
+    Some(parts[3].to_string())
+  };
+  let last_iso = if parts[4].is_empty() {
+    None
+  } else {
+    Some(parts[4].to_string())
+  };
+  let is_current = Some(&name) == current;
+  let stale = last_rel.as_deref().map(is_stale).unwrap_or(false);
+  Some(BranchRow {
+    name,
+    current: is_current,
+    upstream,
+    ahead,
+    behind,
+    last_commit_relative: last_rel,
+    last_commit_iso: last_iso,
+    stale,
+  })
 }
 
 fn parse_track(track: &str) -> (i64, i64) {
@@ -124,50 +131,54 @@ fn run_pretty(_args: BranchArgs, mode: OutputMode) -> Result<()> {
   let rows = collect_rows()?;
   let theme = theme::Theme::detect();
   let pretty = mode.is_pretty();
-
+  let ic = icons::detect(!pretty);
   for r in &rows {
-    let star = if r.current { "*" } else { " " };
-    let name = if pretty {
-      if r.current {
-        theme.branch(&r.name)
-      } else {
-        r.name.clone()
-      }
-    } else {
-      r.name.clone()
-    };
-    let track = match (r.ahead, r.behind) {
-      (0, 0) => String::new(),
-      (a, 0) => format!(" ⇡{a}"),
-      (0, b) => format!(" ⇣{b}"),
-      (a, b) => format!(" ⇡{a}⇣{b}"),
-    };
-    let track = if pretty {
-      match (r.ahead, r.behind) {
-        (_, b) if b > 0 => theme.warn(&track),
-        (a, _) if a > 0 => theme.accent(&track),
-        _ => track,
-      }
-    } else {
-      track
-    };
-    let stale = if r.stale {
-      if pretty {
-        theme.warn(" stale")
-      } else {
-        " stale".to_string()
-      }
-    } else {
-      String::new()
-    };
-    let when = r
-      .last_commit_relative
-      .as_deref()
-      .map(|s| if pretty { theme.dim(s) } else { s.to_string() })
-      .unwrap_or_default();
-    println!("{star} {name}{track}{stale}  {when}");
+    println!("{}", render_row(r, &theme, &ic, pretty));
   }
   Ok(())
+}
+
+fn render_track(r: &BranchRow, ic: &icons::Icons) -> String {
+  match (r.ahead, r.behind) {
+    (0, 0) => String::new(),
+    (a, 0) => format!(" {}{a}", ic.ahead),
+    (0, b) => format!(" {}{b}", ic.behind),
+    (a, b) => format!(" {}{a}{}{b}", ic.ahead, ic.behind),
+  }
+}
+
+fn render_row(r: &BranchRow, theme: &theme::Theme, ic: &icons::Icons, pretty: bool) -> String {
+  let star = if r.current { "*" } else { " " };
+  let name = if pretty && r.current {
+    theme.branch(&r.name)
+  } else {
+    r.name.clone()
+  };
+  let track = render_track(r, ic);
+  let track = if pretty {
+    match (r.ahead, r.behind) {
+      (_, b) if b > 0 => theme.warn(&track),
+      (a, _) if a > 0 => theme.accent(&track),
+      _ => track,
+    }
+  } else {
+    track
+  };
+  let stale = if r.stale {
+    if pretty {
+      theme.warn(" stale")
+    } else {
+      " stale".to_string()
+    }
+  } else {
+    String::new()
+  };
+  let when = r
+    .last_commit_relative
+    .as_deref()
+    .map(|s| if pretty { theme.dim(s) } else { s.to_string() })
+    .unwrap_or_default();
+  format!("{star} {name}{track}{stale}  {when}")
 }
 
 fn run_better(_args: BranchArgs, _mode: OutputMode) -> Result<()> {
@@ -175,15 +186,16 @@ fn run_better(_args: BranchArgs, _mode: OutputMode) -> Result<()> {
   let current = rows.iter().find(|r| r.current).map(|r| r.name.clone());
   let locals: Vec<&BranchRow> = rows
     .iter()
-    .filter(|r| r.upstream.is_none() || !r.upstream.as_ref().unwrap().starts_with("origin/"))
+    .filter(|r| {
+      r.upstream
+        .as_deref()
+        .is_none_or(|u| !u.starts_with("origin/"))
+    })
     .collect();
   let remotes = BTreeMap::<String, Vec<&BranchRow>>::new();
   let stale: Vec<&BranchRow> = rows.iter().filter(|r| r.stale).collect();
 
-  let hints = vec![
-    "use `gb branch --better` to see upstream + ahead/behind".to_string(),
-    "use `gb switch <name>` (passthrough) to change branches".to_string(),
-  ];
+  let hints = vec!["use `gb switch <name>` (passthrough) to change branches".to_string()];
 
   let env = better::envelope_with_hints(
     "branch",

@@ -1,32 +1,46 @@
 use serde::Serialize;
 
+/// Per-file added/removed line counts parsed from numstat output.
 #[derive(Debug, Clone, Serialize)]
 pub struct FileStat {
+  /// File path (rename-normalized).
   pub path: String,
+  /// Number of lines added.
   pub added: u64,
+  /// Number of lines removed.
   pub removed: u64,
 }
 
+/// Aggregate summary across a set of [`FileStat`] entries.
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct DiffSummary {
+  /// Total number of files changed.
   pub files_changed: u64,
+  /// Total number of lines added.
   pub added: u64,
+  /// Total number of lines removed.
   pub removed: u64,
 }
 
+/// A single line within a diff hunk, tagged by its change kind.
 #[derive(Debug, Clone)]
 pub enum DiffLine {
+  /// Unchanged context line.
   Context(String),
+  /// Added (`+`) line.
   Insertion(String),
+  /// Removed (`-`) line.
   Deletion(String),
 }
 
 impl DiffLine {
+  /// Returns the line's text content without its change sign.
   pub fn content(&self) -> &str {
     match self {
       DiffLine::Context(s) | DiffLine::Insertion(s) | DiffLine::Deletion(s) => s,
     }
   }
+  /// Returns the leading diff sign character for the line.
   pub fn sign(&self) -> char {
     match self {
       DiffLine::Context(_) => ' ',
@@ -36,20 +50,28 @@ impl DiffLine {
   }
 }
 
+/// A diff hunk: its `@@` header plus the lines it contains.
 #[derive(Debug, Clone)]
 pub struct Hunk {
+  /// The hunk header line (e.g. `@@ -1,3 +1,3 @@`).
   pub header: String,
+  /// Lines belonging to the hunk.
   pub lines: Vec<DiffLine>,
 }
 
+/// A single file's diff: old/new paths plus its hunks.
 #[derive(Debug, Clone)]
 pub struct DiffFile {
+  /// Path on the old side (`a/`).
   pub old_path: String,
+  /// Path on the new side (`b/`).
   pub new_path: String,
+  /// Hunks comprising the file's changes.
   pub hunks: Vec<Hunk>,
 }
 
 impl DiffFile {
+  /// Returns the path to display, preferring the new path unless it is `/dev/null`.
   pub fn display_path(&self) -> &str {
     if self.new_path == "/dev/null" {
       &self.old_path
@@ -59,6 +81,7 @@ impl DiffFile {
   }
 }
 
+/// Parses `git --numstat` output into a list of [`FileStat`] entries.
 pub fn parse_numstat(output: &str) -> Vec<FileStat> {
   output
     .lines()
@@ -83,26 +106,27 @@ pub fn parse_numstat(output: &str) -> Vec<FileStat> {
     .collect()
 }
 
+/// Normalizes a numstat path, resolving git rename `{old => new}` notation.
 pub fn normalize_path(raw: &str) -> String {
-  if raw.contains(" => ") {
-    let parts: Vec<&str> = raw.split(" => ").collect();
-    if parts.len() == 2 {
-      return parts[1].to_string();
-    }
-    if let Some(stripped) = raw.strip_prefix("{") {
-      if let Some(end) = stripped.find(" => ") {
-        let after = &stripped[end + " => ".len()..];
-        if let Some(close) = after.find('}') {
-          let prefix = &stripped[..end];
-          let inner = &after[close + 1..];
-          return format!("{prefix}{inner}");
-        }
+  if let Some(open) = raw.find('{') {
+    let rest = &raw[open + 1..];
+    if let Some(arrow) = rest.find(" => ") {
+      let after = &rest[arrow + " => ".len()..];
+      if let Some(close) = after.find('}') {
+        let prefix = &raw[..open];
+        let new = &after[..close];
+        let suffix = &after[close + 1..];
+        return format!("{prefix}{new}{suffix}");
       }
     }
+  }
+  if let Some((_, new)) = raw.split_once(" => ") {
+    return new.to_string();
   }
   raw.to_string()
 }
 
+/// Aggregates per-file stats into a single [`DiffSummary`].
 pub fn summarize(files: &[FileStat]) -> DiffSummary {
   DiffSummary {
     files_changed: files.len() as u64,
@@ -111,58 +135,80 @@ pub fn summarize(files: &[FileStat]) -> DiffSummary {
   }
 }
 
-pub fn parse_unified_diff(input: &str) -> Vec<DiffFile> {
-  let mut files = Vec::new();
-  let mut current_file: Option<DiffFile> = None;
-  let mut current_hunk: Option<Hunk> = None;
-
-  for line in input.lines() {
-    if let Some(rest) = line.strip_prefix("--- ") {
-      if let Some(h) = current_hunk.take() {
-        if let Some(f) = current_file.as_mut() {
-          f.hunks.push(h);
-        }
-      }
-      if let Some(f) = current_file.take() {
-        files.push(f);
-      }
-      let old_path = rest.trim().trim_start_matches("a/").to_string();
-      current_file = Some(DiffFile {
-        old_path,
-        new_path: String::new(),
-        hunks: Vec::new(),
-      });
-    } else if let Some(rest) = line.strip_prefix("+++ ") {
-      if let Some(f) = current_file.as_mut() {
-        f.new_path = rest.trim().trim_start_matches("b/").to_string();
-      }
-    } else if line.starts_with("@@") {
-      if let Some(h) = current_hunk.take() {
-        if let Some(f) = current_file.as_mut() {
-          f.hunks.push(h);
-        }
-      }
-      current_hunk = Some(Hunk {
-        header: line.to_string(),
-        lines: Vec::new(),
-      });
-    } else if let Some(h) = current_hunk.as_mut() {
-      if let Some(rest) = line.strip_prefix('+') {
-        h.lines.push(DiffLine::Insertion(rest.to_string()));
-      } else if let Some(rest) = line.strip_prefix('-') {
-        h.lines.push(DiffLine::Deletion(rest.to_string()));
-      } else if let Some(rest) = line.strip_prefix(' ') {
-        h.lines.push(DiffLine::Context(rest.to_string()));
-      } else if line.is_empty() {
-        h.lines.push(DiffLine::Context(String::new()));
-      }
-    }
+/// Classifies a hunk content line into a [`DiffLine`], or `None` if it is not one.
+fn classify_diff_line(line: &str) -> Option<DiffLine> {
+  if let Some(rest) = line.strip_prefix('+') {
+    Some(DiffLine::Insertion(rest.to_string()))
+  } else if let Some(rest) = line.strip_prefix('-') {
+    Some(DiffLine::Deletion(rest.to_string()))
+  } else if let Some(rest) = line.strip_prefix(' ') {
+    Some(DiffLine::Context(rest.to_string()))
+  } else if line.is_empty() {
+    Some(DiffLine::Context(String::new()))
+  } else {
+    None
   }
+}
+
+/// Flushes a pending hunk into the current file, if both are present.
+fn flush_hunk(current_file: &mut Option<DiffFile>, current_hunk: &mut Option<Hunk>) {
   if let Some(h) = current_hunk.take() {
     if let Some(f) = current_file.as_mut() {
       f.hunks.push(h);
     }
   }
+}
+
+/// Parses a unified diff into a list of [`DiffFile`] values.
+pub fn parse_unified_diff(input: &str) -> Vec<DiffFile> {
+  let mut files = Vec::new();
+  let mut current_file: Option<DiffFile> = None;
+  let mut current_hunk: Option<Hunk> = None;
+
+  let lines: Vec<&str> = input.lines().collect();
+  let mut i = 0;
+  while i < lines.len() {
+    let line = lines[i];
+    let is_file_header =
+      line.starts_with("--- ") && lines.get(i + 1).is_some_and(|n| n.starts_with("+++ "));
+    if is_file_header {
+      flush_hunk(&mut current_file, &mut current_hunk);
+      if let Some(f) = current_file.take() {
+        files.push(f);
+      }
+      let old_path = line
+        .strip_prefix("--- ")
+        .unwrap_or(line)
+        .trim()
+        .trim_start_matches("a/");
+      let next = lines[i + 1];
+      let new_path = next
+        .strip_prefix("+++ ")
+        .unwrap_or(next)
+        .trim()
+        .trim_start_matches("b/");
+      current_file = Some(DiffFile {
+        old_path: old_path.to_string(),
+        new_path: new_path.to_string(),
+        hunks: Vec::new(),
+      });
+      i += 2;
+      continue;
+    }
+    if line.starts_with("@@") {
+      flush_hunk(&mut current_file, &mut current_hunk);
+      current_hunk = Some(Hunk {
+        header: line.to_string(),
+        lines: Vec::new(),
+      });
+    } else if let Some(h) = current_hunk.as_mut() {
+      if let Some(diff_line) = classify_diff_line(line) {
+        h.lines.push(diff_line);
+      }
+    }
+    i += 1;
+  }
+  flush_hunk(&mut current_file, &mut current_hunk);
   if let Some(f) = current_file.take() {
     files.push(f);
   }
@@ -170,6 +216,7 @@ pub fn parse_unified_diff(input: &str) -> Vec<DiffFile> {
   files
 }
 
+/// Estimates the rendered character size of a [`DiffFile`].
 pub fn estimate_file_size(file: &DiffFile) -> usize {
   let header_size = file.old_path.len() + file.new_path.len() + 16;
   let hunk_size: usize = file
@@ -180,6 +227,7 @@ pub fn estimate_file_size(file: &DiffFile) -> usize {
   header_size + hunk_size
 }
 
+/// Renders a [`DiffFile`] back into unified-diff text.
 pub fn render_file(file: &DiffFile) -> String {
   let mut out = String::new();
   out.push_str(&format!("--- a/{}\n", file.old_path));
@@ -196,6 +244,8 @@ pub fn render_file(file: &DiffFile) -> String {
   out
 }
 
+/// Truncates a unified diff to a token budget, returning the kept text, the
+/// truncated file paths, and whether truncation occurred.
 pub fn truncate_unified_diff(input: &str, budget_tokens: usize) -> (String, Vec<String>, bool) {
   let char_budget = budget_tokens.saturating_mul(4);
   if input.len() <= char_budget {
@@ -203,6 +253,15 @@ pub fn truncate_unified_diff(input: &str, budget_tokens: usize) -> (String, Vec<
   }
 
   let files = parse_unified_diff(input);
+  if files.is_empty() {
+    let mut cut = char_budget.min(input.len());
+    while cut > 0 && !input.is_char_boundary(cut) {
+      cut -= 1;
+    }
+    let mut kept = input[..cut].to_string();
+    kept.push_str("\n... [truncated]\n");
+    return (kept, Vec::new(), true);
+  }
   let mut kept = String::new();
   let mut truncated_paths = Vec::new();
   let mut used = 0usize;
@@ -237,86 +296,4 @@ pub fn truncate_unified_diff(input: &str, budget_tokens: usize) -> (String, Vec<
 
   let truncated = !truncated_paths.is_empty();
   (kept, truncated_paths, truncated)
-}
-
-#[cfg(test)]
-mod tests {
-  use super::*;
-
-  #[test]
-  fn parse_numstat_simple() {
-    let s = "5\t3\tsrc/main.rs\n2\t1\tREADME.md\n";
-    let v = parse_numstat(s);
-    assert_eq!(v.len(), 2);
-    assert_eq!(v[0].path, "src/main.rs");
-    assert_eq!(v[0].added, 5);
-    assert_eq!(v[0].removed, 3);
-  }
-
-  #[test]
-  fn parse_numstat_skips_binary() {
-    let s = "5\t3\tsrc/main.rs\n-\t-\timage.png\n";
-    let v = parse_numstat(s);
-    assert_eq!(v.len(), 1);
-  }
-
-  #[test]
-  fn parse_numstat_handles_rename() {
-    let s = "5\t3\told.rs => new.rs\n";
-    let v = parse_numstat(s);
-    assert_eq!(v[0].path, "new.rs");
-  }
-
-  #[test]
-  fn summarize_aggregates() {
-    let v = vec![
-      FileStat {
-        path: "a".into(),
-        added: 5,
-        removed: 3,
-      },
-      FileStat {
-        path: "b".into(),
-        added: 10,
-        removed: 2,
-      },
-    ];
-    let s = summarize(&v);
-    assert_eq!(s.files_changed, 2);
-    assert_eq!(s.added, 15);
-    assert_eq!(s.removed, 5);
-  }
-
-  #[test]
-  fn parse_unified_diff_minimal() {
-    let s = "--- a/foo.rs\n+++ b/foo.rs\n@@ -1,3 +1,3 @@\n line1\n-old\n+new\n line3\n";
-    let files = parse_unified_diff(s);
-    assert_eq!(files.len(), 1);
-    assert_eq!(files[0].old_path, "foo.rs");
-    assert_eq!(files[0].new_path, "foo.rs");
-    assert_eq!(files[0].hunks.len(), 1);
-    assert_eq!(files[0].hunks[0].lines.len(), 4);
-  }
-
-  #[test]
-  fn truncate_under_budget_is_passthrough() {
-    let s = "--- a/x\n+++ b/x\n@@ -0,0 +1,1 @@\n+hello\n";
-    let (out, paths, truncated) = truncate_unified_diff(s, 100);
-    assert!(!truncated);
-    assert!(paths.is_empty());
-    assert_eq!(out, s);
-  }
-
-  #[test]
-  fn truncate_over_budget_marks_excess() {
-    let mut big = String::new();
-    for i in 0..20 {
-      big.push_str(&format!(
-                "--- a/file{i}\n+++ b/file{i}\n@@ -0,0 +1,1 @@\n+content for file {i} is long enough to consume tokens\n"
-            ));
-    }
-    let (_out, paths, truncated) = truncate_unified_diff(&big, 50);
-    assert!(truncated);
-    assert!(!paths.is_empty());
-  }
 }

@@ -5,6 +5,7 @@ use super::StatusArgs;
 use crate::git::proc;
 use crate::output::{OutputMode, better};
 
+/// Dispatch `gb status`: forward explicit args, structured `--better`, or `-sb`.
 pub fn run(args: StatusArgs, mode: OutputMode) -> Result<()> {
   if !args.passthrough.is_empty() {
     let mut all: Vec<String> = vec!["status".to_string(), "-sb".to_string()];

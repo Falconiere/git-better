@@ -5,6 +5,9 @@ use super::ReflogArgs;
 use crate::git::{proc, reflog as reflog_mod};
 use crate::output::{OutputMode, better, human};
 
+const DEFAULT_COUNT: usize = 50;
+
+/// Dispatch `gb reflog`: passthrough, structured `--better`, or the pretty list.
 pub fn run(args: ReflogArgs, mode: OutputMode) -> Result<()> {
   if !args.passthrough.is_empty() {
     let mut all = vec!["reflog".to_string()];
@@ -25,7 +28,7 @@ pub fn run(args: ReflogArgs, mode: OutputMode) -> Result<()> {
 }
 
 fn run_pretty(args: ReflogArgs, mode: OutputMode) -> Result<()> {
-  let n = args.n.unwrap_or(50);
+  let n = args.n.unwrap_or(DEFAULT_COUNT);
   let raw = proc::run_git(&[
     "reflog".to_string(),
     format!("-n{n}"),
@@ -37,10 +40,11 @@ fn run_pretty(args: ReflogArgs, mode: OutputMode) -> Result<()> {
   Ok(())
 }
 
-fn run_better(_args: ReflogArgs, _mode: OutputMode) -> Result<()> {
+fn run_better(args: ReflogArgs, _mode: OutputMode) -> Result<()> {
+  let n = args.n.unwrap_or(DEFAULT_COUNT);
   let raw = proc::run_git(&[
     "reflog".to_string(),
-    "-n50".to_string(),
+    format!("-n{n}"),
     "--date=iso-strict".to_string(),
     "--abbrev=12".to_string(),
   ])?;
