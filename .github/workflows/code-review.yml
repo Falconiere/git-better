@@ -14,5 +14,5 @@ jobs:
           fetch-depth: 0
       - uses: falconiere/toolu-ghactions/code-review@v5
         with:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          MODEL: 'minimax/minimax-m3'
+          PROVIDER: openrouter
+          API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
