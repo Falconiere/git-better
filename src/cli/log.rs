@@ -92,7 +92,17 @@ fn apply_log_budget(
   (records.into_iter().take(end).collect(), truncated)
 }
 
+fn is_safe_git_ref(token: &str) -> bool {
+  !token.is_empty()
+    && token.len() <= 1024
+    && !token.bytes().any(|b| b == 0)
+    && !token.starts_with('-')
+}
+
 fn commit_count_since(base: &str) -> u64 {
+  if !is_safe_git_ref(base) {
+    return 0;
+  }
   proc::run_git(&["rev-list".into(), "--count".into(), format!("{base}..HEAD")])
     .ok()
     .and_then(|s| s.trim().parse().ok())

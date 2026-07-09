@@ -152,7 +152,7 @@ fn log_forwards_extra_args() {
     .unwrap();
   let stdout = String::from_utf8(actual.stdout).unwrap();
   assert!(
-    stdout.contains("Test") || stdout.contains("author") || stdout.contains("commit"),
-    "passthrough should still show output; got: {stdout}"
+    stdout.contains("Test"),
+    "passthrough --author should filter by author; got: {stdout}"
   );
 }

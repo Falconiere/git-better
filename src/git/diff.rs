@@ -264,11 +264,11 @@ pub fn truncate_unified_diff(input: &str, budget_tokens: usize) -> (String, Vec<
   }
   let mut kept = String::new();
   let mut truncated_paths = Vec::new();
+  let file_sizes: Vec<usize> = files.iter().map(estimate_file_size).collect();
   let mut used = 0usize;
   let mut last_kept_index: Option<usize> = None;
 
-  for (i, file) in files.iter().enumerate() {
-    let size = estimate_file_size(file);
+  for (i, &size) in file_sizes.iter().enumerate() {
     if used + size > char_budget {
       break;
     }

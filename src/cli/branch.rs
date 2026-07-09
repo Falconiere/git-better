@@ -84,7 +84,7 @@ fn parse_branch_row(line: &str, current: Option<&String>) -> Option<BranchRow> {
     Some(parts[4].to_string())
   };
   let is_current = Some(&name) == current;
-  let stale = last_rel.as_deref().map(is_stale).unwrap_or(false);
+  let stale = last_iso.as_deref().map(is_stale_iso).unwrap_or(false);
   Some(BranchRow {
     name,
     current: is_current,
@@ -113,17 +113,54 @@ fn parse_track(track: &str) -> (i64, i64) {
   (ahead, behind)
 }
 
-fn is_stale(relative: &str) -> bool {
-  let mut parts = relative.split_whitespace();
-  let n: u64 = match parts.next().and_then(|s| s.parse().ok()) {
-    Some(n) => n,
-    None => return false,
+fn is_stale_iso(iso: &str) -> bool {
+  let Some((y, m, d)) = parse_ymd(iso) else {
+    return false;
   };
-  match parts.next() {
-    Some("month" | "months" | "year" | "years") => true,
-    Some("week" | "weeks") if n >= 4 => true,
-    _ => false,
+  let commit_day = days_from_civil(y, m, d);
+  let now_secs = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .map(|d| d.as_secs())
+    .unwrap_or(0) as i32;
+  let (ty, tm, td) = days_to_civil(now_secs / 86400);
+  let today_day = days_from_civil(ty, tm, td);
+  today_day.saturating_sub(commit_day) >= 28
+}
+
+fn parse_ymd(iso: &str) -> Option<(i32, u32, u32)> {
+  let s = iso.get(..10)?;
+  let mut parts = s.split('-');
+  let y: i32 = parts.next()?.parse().ok()?;
+  let m: u32 = parts.next()?.parse().ok()?;
+  let d: u32 = parts.next()?.parse().ok()?;
+  if (1..=12).contains(&m) && (1..=31).contains(&d) {
+    Some((y, m, d))
+  } else {
+    None
   }
+}
+
+fn days_from_civil(y: i32, m: u32, d: u32) -> i32 {
+  let (y, m) = if m <= 2 { (y - 1, m + 12) } else { (y, m) };
+  let era = (if y >= 0 { y } else { y - 399 }) / 400;
+  let yoe = y - era * 400;
+  let doy = (153 * (m as i32 - 3) + 2) / 5 + d as i32 - 1;
+  let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  era * 146097 + doe - 719468
+}
+
+fn days_to_civil(z: i32) -> (i32, u32, u32) {
+  let z = z + 719468;
+  let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+  let doe = z - era * 146097;
+  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+  let y = yoe + era * 400;
+  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+  let mp = (5 * doy + 2) / 153;
+  let d = doy - (153 * mp + 2) / 5 + 1;
+  let m = mp + if mp < 10 { 3 } else { -9 };
+  let y = y + if m <= 2 { 1 } else { 0 };
+  (y, m as u32, d as u32)
 }
 
 fn run_pretty(_args: BranchArgs, mode: OutputMode) -> Result<()> {
@@ -216,4 +253,26 @@ fn run_better(_args: BranchArgs, _mode: OutputMode) -> Result<()> {
   )?;
   println!("{env}");
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{days_from_civil, is_stale_iso, parse_ymd};
+
+  #[test]
+  fn parse_ymd_reads_git_iso_prefix() {
+    assert_eq!(parse_ymd("2024-06-15 18:30:45 -0400"), Some((2024, 6, 15)));
+  }
+
+  #[test]
+  fn is_stale_iso_flags_old_dates() {
+    assert!(is_stale_iso("2000-01-01 00:00:00 +0000"));
+    assert!(!is_stale_iso("2099-01-01 00:00:00 +0000"));
+  }
+
+  #[test]
+  fn days_from_civil_round_trips() {
+    let day = days_from_civil(2024, 6, 15);
+    assert!(day > 0);
+  }
 }
