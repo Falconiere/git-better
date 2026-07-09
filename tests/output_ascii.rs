@@ -33,7 +33,10 @@ fn gb_ascii_env_with_better_still_valid_json() {
     .output()
     .unwrap();
   let stdout = String::from_utf8(actual.stdout).unwrap();
-  assert!(stdout.is_ascii(), "GB_ASCII=1 must produce ASCII output; got: {stdout}");
+  assert!(
+    stdout.is_ascii(),
+    "GB_ASCII=1 must produce ASCII output; got: {stdout}"
+  );
   let v: serde_json::Value = serde_json::from_str(&stdout).expect("JSON");
   assert_eq!(v["ok"], true);
 }

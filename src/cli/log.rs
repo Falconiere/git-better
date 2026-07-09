@@ -93,14 +93,10 @@ fn apply_log_budget(
 }
 
 fn commit_count_since(base: &str) -> u64 {
-  proc::run_git(&[
-    "rev-list".into(),
-    "--count".into(),
-    format!("{base}..HEAD"),
-  ])
-  .ok()
-  .and_then(|s| s.trim().parse().ok())
-  .unwrap_or(0)
+  proc::run_git(&["rev-list".into(), "--count".into(), format!("{base}..HEAD")])
+    .ok()
+    .and_then(|s| s.trim().parse().ok())
+    .unwrap_or(0)
 }
 
 fn print_story_envelope(

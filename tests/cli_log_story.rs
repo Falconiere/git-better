@@ -135,7 +135,10 @@ fn log_better_budget_truncates_commits() {
   let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
   assert_eq!(v["data"]["truncated"], true);
   let count = v["data"]["commits"].as_array().unwrap().len();
-  assert!(count < full_count, "budget should drop commits ({count} < {full_count})");
+  assert!(
+    count < full_count,
+    "budget should drop commits ({count} < {full_count})"
+  );
 }
 
 #[test]
