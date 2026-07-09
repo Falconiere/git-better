@@ -1,0 +1,4 @@
+[build]
+# Cargo uses all available CPU cores by default for parallel crate compilation.
+# sccache is used in CI only (via RUSTC_WRAPPER env var with CARGO_INCREMENTAL=0).
+# Local dev relies on incremental compilation which sccache cannot cache.

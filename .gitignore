@@ -4,18 +4,16 @@
 .LSOverride
 Icon?
 
-# Node
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Rust / Cargo
+/target/
+/Cargo.lock.bak
+**/*.rs.bk
+*.pdb
 
 # Build / dist
-dist/
-build/
-out/
-*.tsbuildinfo
+/dist/
+/build/
+/out/
 
 # Env
 .env
@@ -27,7 +25,19 @@ out/
 .idea/
 *.swp
 *.swo
+*~
 
 # Logs
 logs/
 *.log
+
+# Test fixtures (generated at test time)
+tests/fixtures/*/.git/
+tests/fixtures/*/node_modules/
+tests/fixtures/*/target/
+tests/fixtures/*/Cargo.lock
+tests/fixtures/*/package-lock.json
+
+# Agent tooling
+.serena/
+.claude/tmp/

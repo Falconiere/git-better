@@ -1,0 +1,45 @@
+[package]
+name = "git-better"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Token-lean git companion for humans and LLM agents"
+license = "MIT"
+repository = "https://github.com/Falconiere/git-better"
+homepage = "https://github.com/Falconiere/git-better"
+readme = "README.md"
+keywords = ["git", "cli", "llm", "agent", "prettier", "syntect"]
+categories = ["command-line-utilities", "development-tools", "version-control"]
+exclude = ["/.github", "/tests/fixtures", "/.gitignore"]
+
+[lib]
+name = "git_better"
+path = "src/lib.rs"
+
+[[bin]]
+name = "gb"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive", "wrap_help"] }
+tokio = { version = "1.40", features = ["process", "io-util", "rt-multi-thread", "macros"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+owo-colors = "4.1"
+terminal_size = "0.3"
+unicode-width = "0.1"
+syntect = { version = "5.2", features = ["default-fancy", "default-themes", "regex-onig"] }
+regex = "1.10"
+
+[dev-dependencies]
+tempfile = "3.13"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+opt-level = 3
