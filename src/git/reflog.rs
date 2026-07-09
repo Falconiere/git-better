@@ -24,7 +24,7 @@ fn parse_reflog_line(line: &str) -> Option<ReflogEntry> {
   let rest = &line[first_space + 1..];
   let close_brace = rest.find("}: ")?;
   let ref_sel = rest[..close_brace + 1].to_string();
-  let action = rest[close_brace + 3..].to_string();
+  let action = rest[close_brace + 2..].trim().to_string();
   let time = if let Some(start) = ref_sel.find('{') {
     let inside = &ref_sel[start + 1..ref_sel.len() - 1];
     if inside.chars().all(|c| c.is_ascii_digit()) {

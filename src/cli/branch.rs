@@ -114,17 +114,16 @@ fn parse_track(track: &str) -> (i64, i64) {
 }
 
 fn is_stale(relative: &str) -> bool {
-  if let Some(num) = relative.split_whitespace().next() {
-    if let Ok(n) = num.parse::<u64>() {
-      if relative.contains("month") || relative.contains("year") {
-        return true;
-      }
-      if relative.contains("week") && n >= 4 {
-        return true;
-      }
-    }
+  let mut parts = relative.split_whitespace();
+  let n: u64 = match parts.next().and_then(|s| s.parse().ok()) {
+    Some(n) => n,
+    None => return false,
+  };
+  match parts.next() {
+    Some("month" | "months" | "year" | "years") => true,
+    Some("week" | "weeks") if n >= 4 => true,
+    _ => false,
   }
-  false
 }
 
 fn run_pretty(_args: BranchArgs, mode: OutputMode) -> Result<()> {
@@ -192,7 +191,14 @@ fn run_better(_args: BranchArgs, _mode: OutputMode) -> Result<()> {
         .is_none_or(|u| !u.starts_with("origin/"))
     })
     .collect();
-  let remotes = BTreeMap::<String, Vec<&BranchRow>>::new();
+  let mut remotes: BTreeMap<String, Vec<&BranchRow>> = BTreeMap::new();
+  for r in &rows {
+    if let Some(up) = &r.upstream {
+      if let Some((remote, _)) = up.split_once('/') {
+        remotes.entry(remote.to_string()).or_default().push(r);
+      }
+    }
+  }
   let stale: Vec<&BranchRow> = rows.iter().filter(|r| r.stale).collect();
 
   let hints = vec!["use `gb switch <name>` (passthrough) to change branches".to_string()];

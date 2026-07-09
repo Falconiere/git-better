@@ -172,7 +172,7 @@ fn detect_branch_and_base() -> Option<(String, String, String)> {
     let base_ref = mb_result.clone().unwrap_or_else(|| "HEAD~1".to_string());
     let base_display = match mb_result {
       Some(mb) => {
-        let short = &mb[..7.min(mb.len())];
+        let short: String = mb.chars().take(7).collect();
         format!("{up} ({short})")
       },
       None => "HEAD~1".to_string(),
@@ -191,7 +191,7 @@ fn detect_branch_and_base() -> Option<(String, String, String)> {
       if let Ok(mb) = proc::run_git(&["merge-base".into(), "HEAD".into(), candidate.into()]) {
         let mb = mb.trim().to_string();
         if !mb.is_empty() {
-          let short = &mb[..7.min(mb.len())];
+          let short: String = mb.chars().take(7).collect();
           return Some((
             branch,
             candidate.to_string(),
