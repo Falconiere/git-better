@@ -118,13 +118,21 @@ fn is_stale_iso(iso: &str) -> bool {
     return false;
   };
   let commit_day = days_from_civil(y, m, d);
-  let now_secs = std::time::SystemTime::now()
-    .duration_since(std::time::UNIX_EPOCH)
-    .map(|d| d.as_secs())
-    .unwrap_or(0) as i32;
-  let (ty, tm, td) = days_to_civil(now_secs / 86400);
-  let today_day = days_from_civil(ty, tm, td);
+  let Some(today_day) = today_civil_day() else {
+    return false;
+  };
   today_day.saturating_sub(commit_day) >= 28
+}
+
+fn today_civil_day() -> Option<i32> {
+  let dur = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .ok()?;
+  Some(unix_epoch_civil_day() + (dur.as_secs() / 86_400) as i32)
+}
+
+fn unix_epoch_civil_day() -> i32 {
+  days_from_civil(1970, 1, 1)
 }
 
 fn parse_ymd(iso: &str) -> Option<(i32, u32, u32)> {
@@ -147,20 +155,6 @@ fn days_from_civil(y: i32, m: u32, d: u32) -> i32 {
   let doy = (153 * (m as i32 - 3) + 2) / 5 + d as i32 - 1;
   let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
   era * 146097 + doe - 719468
-}
-
-fn days_to_civil(z: i32) -> (i32, u32, u32) {
-  let z = z + 719468;
-  let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
-  let doe = z - era * 146097;
-  let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-  let y = yoe + era * 400;
-  let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-  let mp = (5 * doy + 2) / 153;
-  let d = doy - (153 * mp + 2) / 5 + 1;
-  let m = mp + if mp < 10 { 3 } else { -9 };
-  let y = y + if m <= 2 { 1 } else { 0 };
-  (y, m as u32, d as u32)
 }
 
 fn run_pretty(_args: BranchArgs, mode: OutputMode) -> Result<()> {

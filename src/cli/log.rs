@@ -79,28 +79,34 @@ fn apply_log_budget(
     return (records, false);
   };
   let char_budget = budget.saturating_mul(4);
-  let mut end = records.len();
-  let mut truncated = false;
-  while end > 0 {
-    let serialized = serde_json::to_string(&records[..end]).unwrap_or_default();
-    if serialized.len() <= char_budget {
-      break;
-    }
-    end -= 1;
-    truncated = true;
+  if records.is_empty() {
+    return (records, false);
   }
-  (records.into_iter().take(end).collect(), truncated)
-}
-
-fn is_safe_git_ref(token: &str) -> bool {
-  !token.is_empty()
-    && token.len() <= 1024
-    && !token.bytes().any(|b| b == 0)
-    && !token.starts_with('-')
+  let full_len = serde_json::to_string(&records)
+    .map(|s| s.len())
+    .unwrap_or(usize::MAX);
+  if full_len <= char_budget {
+    return (records, false);
+  }
+  let mut lo = 0usize;
+  let mut hi = records.len();
+  while lo < hi {
+    let mid = lo + (hi - lo).div_ceil(2);
+    let len = serde_json::to_string(&records[..mid])
+      .map(|s| s.len())
+      .unwrap_or(usize::MAX);
+    if len <= char_budget {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  let truncated = lo < records.len();
+  (records.into_iter().take(lo).collect(), truncated)
 }
 
 fn commit_count_since(base: &str) -> u64 {
-  if !is_safe_git_ref(base) {
+  if !proc::is_safe_git_ref(base) {
     return 0;
   }
   proc::run_git(&["rev-list".into(), "--count".into(), format!("{base}..HEAD")])
@@ -254,12 +260,19 @@ fn detect_branch_and_base() -> Option<(String, String, String)> {
 }
 
 fn diff_stats_for(base: &str) -> (u64, u64, u64) {
-  let numstat = proc::run_git(&[
-    "diff".to_string(),
-    "--numstat".to_string(),
-    base.to_string(),
-    "HEAD".to_string(),
-  ])
+  let numstat = if proc::is_safe_git_ref(base) {
+    proc::run_git(&[
+      "diff".to_string(),
+      "--numstat".to_string(),
+      base.to_string(),
+      "HEAD".to_string(),
+    ])
+  } else {
+    Err(crate::error::GbError::GitFailed {
+      code: 1,
+      stderr: "invalid git ref".into(),
+    })
+  }
   .or_else(|_| {
     proc::run_git(&[
       "diff".to_string(),

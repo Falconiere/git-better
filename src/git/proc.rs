@@ -51,6 +51,14 @@ pub fn run_git_with_excludes(args: &[String]) -> Result<String, GbError> {
   run_git(&full)
 }
 
+/// Returns true when `token` is safe to pass as a single git CLI argument.
+pub fn is_safe_git_ref(token: &str) -> bool {
+  !token.is_empty()
+    && token.len() <= 1024
+    && !token.bytes().any(|b| b == 0)
+    && !token.starts_with('-')
+}
+
 /// Writes the given text to stdout, ignoring write errors.
 pub fn write_to_stdout(text: &str) {
   use std::io::Write;

@@ -7,18 +7,12 @@ use crate::output::{OutputMode, icons, layout};
 fn diff_stat_header(theme: &Theme, summary: &DiffSummary, pretty: bool) -> String {
   if pretty {
     format!(
-      "{} file{} · {}{}{} {}{}",
+      "{} file{} · {}{}{}",
       summary.files_changed,
       if summary.files_changed == 1 { "" } else { "s" },
       theme.insertion(&format!("+{}", summary.added)),
       theme.dim(" / "),
       theme.deletion(&format!("-{}", summary.removed)),
-      theme.dim("·"),
-      if summary.files_changed == 1 {
-        "file"
-      } else {
-        "files"
-      }
     )
   } else {
     format!(
