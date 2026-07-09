@@ -27,7 +27,10 @@ fn passthrough_rev_parse() {
     .unwrap();
   assert!(actual.status.success());
   let stdout = String::from_utf8(actual.stdout).unwrap();
-  assert_eq!(stdout.trim().len(), 40, "expected a 40-char SHA");
+  assert!(
+    stdout.trim().chars().all(|c| c.is_ascii_hexdigit()) && stdout.trim().len() == 40,
+    "expected a 40-char hex SHA, got: {stdout:?}"
+  );
 }
 
 #[test]

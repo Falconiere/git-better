@@ -13,6 +13,8 @@ prettification and `--better` JSON output.
 ## Tech stack
 
 - **Language**: Rust 2024 edition, MSRV 1.85 (for `std::sync::LazyLock`).
+  `rust-toolchain.toml` pins a newer compiler for local dev/CI; `Cargo.toml`
+  `rust-version` is the MSRV gate.
 - **Platform**: **macOS arm64 (Apple Silicon) only** — this is a
   single-machine personal tool for the user. Release artifacts target
   `aarch64-apple-darwin`. CI runs on `ubuntu-latest` (cheaper; the
@@ -77,7 +79,8 @@ tests/
 
 ## Conventions
 
-- **No comments in code unless asked.** The user is explicit about this.
+- **No comments in Rust source unless asked.** Config files (`.toml`) may
+  include brief comments. The user is explicit about this.
 - **No emojis in source files or commits unless asked.** They appear in
   *output* (via `icons.rs`), not in source.
 - **No CLAUDE.md / additional agent files** — `AGENTS.md` is the only one.

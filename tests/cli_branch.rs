@@ -13,7 +13,7 @@ fn branch_lists_branches() {
     .unwrap();
   let stdout = String::from_utf8(actual.stdout).unwrap();
   assert!(stdout.contains("main"));
-  assert!(stdout.contains("*"));
+  assert!(stdout.lines().any(|l| l.starts_with("* main")), "expected current branch marker; got: {stdout}");
 }
 
 #[test]

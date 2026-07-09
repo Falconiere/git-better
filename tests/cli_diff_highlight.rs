@@ -14,12 +14,12 @@ fn diff_full_contains_added_and_removed_lines() {
   assert!(actual.status.success());
   let stdout = String::from_utf8(actual.stdout).unwrap();
   assert!(
-    stdout.contains("+"),
-    "expected a `+` insertion marker; got: {stdout}"
+    stdout.lines().any(|l| l.starts_with('+') && !l.starts_with("+++")),
+    "expected insertion marker; got: {stdout}"
   );
   assert!(
-    stdout.contains("-"),
-    "expected a `-` deletion marker; got: {stdout}"
+    stdout.lines().any(|l| l.starts_with('-') && !l.starts_with("---")),
+    "expected deletion marker; got: {stdout}"
   );
   assert!(
     stdout.contains("@@"),

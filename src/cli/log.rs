@@ -68,7 +68,39 @@ fn run_better(args: LogArgs, mode: OutputMode) -> Result<()> {
     return run_story(&args, &records, mode);
   }
 
-  print_plain_log_envelope(&args, &records)
+  print_plain_log_envelope(&args, records)
+}
+
+fn apply_log_budget(
+  records: Vec<commit::CommitRecord>,
+  budget: Option<usize>,
+) -> (Vec<commit::CommitRecord>, bool) {
+  let Some(budget) = budget else {
+    return (records, false);
+  };
+  let char_budget = budget.saturating_mul(4);
+  let mut end = records.len();
+  let mut truncated = false;
+  while end > 0 {
+    let serialized = serde_json::to_string(&records[..end]).unwrap_or_default();
+    if serialized.len() <= char_budget {
+      break;
+    }
+    end -= 1;
+    truncated = true;
+  }
+  (records.into_iter().take(end).collect(), truncated)
+}
+
+fn commit_count_since(base: &str) -> u64 {
+  proc::run_git(&[
+    "rev-list".into(),
+    "--count".into(),
+    format!("{base}..HEAD"),
+  ])
+  .ok()
+  .and_then(|s| s.trim().parse().ok())
+  .unwrap_or(0)
 }
 
 fn print_story_envelope(
@@ -105,7 +137,9 @@ fn print_story_envelope(
 fn run_story(args: &LogArgs, records: &[commit::CommitRecord], mode: OutputMode) -> Result<()> {
   let (branch, base_ref, base_display) = detect_branch_and_base()
     .unwrap_or_else(|| ("(current)".into(), "HEAD~1".into(), "(base)".into()));
-  let total = records.len() as u64;
+  let fetched = records.len() as u64;
+  let total = commit_count_since(&base_ref);
+  let total = if total > 0 { total } else { fetched };
   let (by_type, by_author) = collect_by_type_author(records);
   let first_subject = records
     .first()
@@ -134,21 +168,30 @@ fn run_story(args: &LogArgs, records: &[commit::CommitRecord], mode: OutputMode)
   Ok(())
 }
 
-fn print_plain_log_envelope(args: &LogArgs, records: &[commit::CommitRecord]) -> Result<()> {
-  let (by_type, by_author) = collect_by_type_author(records);
+fn print_plain_log_envelope(args: &LogArgs, records: Vec<commit::CommitRecord>) -> Result<()> {
+  let (records, truncated) = apply_log_budget(records, args.budget);
+  let (by_type, by_author) = collect_by_type_author(&records);
+  let mut hints = vec![
+    "use `gb log -n N` to scope the size".to_string(),
+    "use `gb log --story` for a one-line branch summary".to_string(),
+  ];
+  if truncated {
+    hints.insert(
+      0,
+      "log output truncated to fit --budget; raise budget or use `gb log -n N`".to_string(),
+    );
+  }
   let env = better::envelope_with_hints(
     "log",
     json!({
         "commits": records,
-        "groups": group_by_pr(records),
+        "groups": group_by_pr(&records),
         "by_type": by_type,
         "by_author": by_author,
         "total": records.len(),
+        "truncated": truncated,
     }),
-    vec![
-      "use `gb log -n N` to scope the size".to_string(),
-      "use `gb log --story` for a one-line branch summary".to_string(),
-    ],
+    hints,
     json!({"duration_ms": 0, "bytes": 0, "budget": args.budget}),
   )?;
   println!("{env}");

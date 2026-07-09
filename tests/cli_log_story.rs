@@ -113,6 +113,32 @@ fn log_pretty_prints_recent_commits_with_type_tags() {
 }
 
 #[test]
+fn log_better_budget_truncates_commits() {
+  let dir = common::init_with_pr_trail();
+  let full = Command::cargo_bin("gb")
+    .unwrap()
+    .args(["--better", "log"])
+    .current_dir(dir.path())
+    .output()
+    .unwrap();
+  let full_stdout = String::from_utf8(full.stdout).unwrap();
+  let full_v: serde_json::Value = serde_json::from_str(&full_stdout).unwrap();
+  let full_count = full_v["data"]["commits"].as_array().unwrap().len();
+
+  let actual = Command::cargo_bin("gb")
+    .unwrap()
+    .args(["--better", "log", "--budget", "50"])
+    .current_dir(dir.path())
+    .output()
+    .unwrap();
+  let stdout = String::from_utf8(actual.stdout).unwrap();
+  let v: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+  assert_eq!(v["data"]["truncated"], true);
+  let count = v["data"]["commits"].as_array().unwrap().len();
+  assert!(count < full_count, "budget should drop commits ({count} < {full_count})");
+}
+
+#[test]
 fn log_forwards_extra_args() {
   let dir = common::init_with_pr_trail();
   let actual = Command::cargo_bin("gb")

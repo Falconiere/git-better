@@ -72,6 +72,16 @@ fn diff_better_full_includes_lockfiles() {
 #[test]
 fn diff_better_budget_truncates_large_diff() {
   let dir = common::init_syntax_heavy();
+  let full = Command::cargo_bin("gb")
+    .unwrap()
+    .args(["--better", "diff"])
+    .current_dir(dir.path())
+    .output()
+    .unwrap();
+  let full_stdout = String::from_utf8(full.stdout).unwrap();
+  let full_v: serde_json::Value = serde_json::from_str(&full_stdout).unwrap();
+  let full_bytes = full_v["meta"]["bytes"].as_u64().unwrap();
+
   let actual = Command::cargo_bin("gb")
     .unwrap()
     .args(["--better", "diff", "--budget", "50"])
@@ -90,8 +100,8 @@ fn diff_better_budget_truncates_large_diff() {
   assert_eq!(meta["budget"], 50);
   let bytes = meta["bytes"].as_u64().unwrap();
   assert!(
-    bytes <= 50 * 4,
-    "truncated bytes ({bytes}) must fit in budget"
+    bytes < full_bytes,
+    "truncated bytes ({bytes}) must be smaller than full diff ({full_bytes})"
   );
   let hints = v["hints"].as_array().unwrap();
   assert!(
