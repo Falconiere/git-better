@@ -37,3 +37,7 @@ tests/fixtures/*/node_modules/
 tests/fixtures/*/target/
 tests/fixtures/*/Cargo.lock
 tests/fixtures/*/package-lock.json
+
+# Agent tooling
+.serena/
+.claude/tmp/
