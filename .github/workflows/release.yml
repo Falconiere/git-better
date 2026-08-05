@@ -36,7 +36,7 @@ jobs:
               exit 1
               ;;
           esac
-          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
           if [ "$tag" != "v$version" ]; then
             echo "::error::tag $tag does not match Cargo.toml version $version"
             exit 1
@@ -146,6 +146,16 @@ jobs:
           VERSION: ${{ needs.guard.outputs.version }}
           SHA256: ${{ needs.build.outputs.sha256 }}
         run: |
+          case "$SHA256" in
+            *[!0-9a-f]*)
+              echo "::error::build checksum is not hexadecimal"
+              exit 1
+              ;;
+          esac
+          if [ ${#SHA256} -ne 64 ]; then
+            echo "::error::build checksum is not 64 characters"
+            exit 1
+          fi
           mkdir -p tap/Formula
           sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA256/g" \
             packaging/homebrew/git-better.rb.tmpl > tap/Formula/git-better.rb
