@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Compare tag with crate version
         id: check
         env:
@@ -36,7 +38,12 @@ jobs:
               exit 1
               ;;
           esac
-          version=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -1)
+          version=$(cargo metadata --format-version 1 --no-deps \
+            | jq -r '.packages[] | select(.name == "git-better") | .version')
+          if [ -z "$version" ]; then
+            echo "::error::cannot read the crate version from cargo metadata"
+            exit 1
+          fi
           if [ "$tag" != "v$version" ]; then
             echo "::error::tag $tag does not match Cargo.toml version $version"
             exit 1
