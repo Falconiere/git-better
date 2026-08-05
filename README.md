@@ -24,9 +24,17 @@ cargo install git-better                 # from crates.io
 cargo install --path .                   # from a local clone
 ```
 
-Each tagged release also ships a `git-better-<version>-aarch64-apple-darwin.tar.gz`
-tarball with a `.sha256` sidecar on the
-[releases page](https://github.com/Falconiere/git-better/releases).
+Or the shell installer, which fetches the prebuilt binary:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/Falconiere/git-better/releases/latest/download/git-better-installer.sh | sh
+```
+
+Each tagged release also ships `git-better-aarch64-apple-darwin.tar.xz` with a
+`.sha256` sidecar on the
+[releases page](https://github.com/Falconiere/git-better/releases). Releases are
+cut by release-plz + dist — see [docs/release.md](docs/release.md).
 
 ## Usage
 

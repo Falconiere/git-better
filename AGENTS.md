@@ -76,8 +76,9 @@ src/
     reflog.rs              (M1)
     conventions.rs         (v1) `gb conventions`
     skill.rs               (v1) `gb skill print|path|install`
-packaging/
-  homebrew/git-better.rb.tmpl  tap formula rendered by the release workflow (v1)
+release-plz.toml            release-plz bot config: version + CHANGELOG + tag (v1)
+docs/
+  release.md               release runbook + one-time setup (v1)
 docs/toolu/
   specs/v1.md              accepted v1 design spec
   plans/2026-08-05-v1.md   executed v1 plan + ledger contract
@@ -137,6 +138,16 @@ tests/
 - **Versioning**: the CLI surface and the `--better` envelope (with
   `schema_version` on the convention profile) are the stable `1.x` contract. The
   Rust library API is internal and may change in any release.
+- **Releases** follow the same pattern as `Falconiere/comemory` and push to the
+  same tap, `Falconiere/homebrew-tap`: release-plz owns version + CHANGELOG +
+  tag, `dist` owns build + GitHub Release + formula, and two hand-maintained
+  workflows follow (`release-finalize.yml` smoke test, `crates-io.yml` publish).
+  **Never hand-edit the version in `Cargo.toml`** — the bot does that.
+  `.github/workflows/release.yml` is dist-generated except for two blocks marked
+  `NOTE:` (the quality gate in `plan`, the App-token step in
+  `publish-homebrew-formula`); re-apply both after any `dist init`/`dist generate`,
+  and keep `allow-dirty = ["ci"]` so dist tolerates them. Runbook:
+  `docs/release.md`.
 
 ## Verifying changes
 
