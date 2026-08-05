@@ -155,7 +155,7 @@ pub fn build_profile(root: &Path, with_remote: bool) -> Result<Profile, GbError>
   Ok(Profile {
     schema_version: SCHEMA_VERSION,
     repo_root: root.display().to_string(),
-    generated_at: now_rfc3339(),
+    generated_at: now_rfc3339()?,
     source_hash: source_hash(root),
     pr: PullRequest {
       template_path,
@@ -425,8 +425,8 @@ fn gh_pr_list(root: &Path) -> Option<String> {
   }
 }
 
-fn now_rfc3339() -> String {
+fn now_rfc3339() -> Result<String, GbError> {
   OffsetDateTime::now_utc()
     .format(&Rfc3339)
-    .unwrap_or_default()
+    .map_err(|e| GbError::Other(anyhow::anyhow!("cannot format the current time: {e}")))
 }

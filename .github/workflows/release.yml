@@ -29,6 +29,13 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           tag="${INPUT_TAG:-$REF_NAME}"
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "::error::tag '$tag' is not a vMAJOR.MINOR.PATCH tag"
+              exit 1
+              ;;
+          esac
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           if [ "$tag" != "v$version" ]; then
             echo "::error::tag $tag does not match Cargo.toml version $version"
@@ -125,19 +132,23 @@ jobs:
             echo "::notice::HOMEBREW_TAP_TOKEN is not set — skipping the tap bump"
           fi
 
+      - name: Check out the tap
+        if: steps.token.outputs.present == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Falconiere/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
       - name: Render and push the formula
         if: steps.token.outputs.present == 'true'
         env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.guard.outputs.version }}
           SHA256: ${{ needs.build.outputs.sha256 }}
         run: |
-          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA256/g" \
-            packaging/homebrew/git-better.rb.tmpl > git-better.rb
-          git clone --depth 1 \
-            "https://x-access-token:$HOMEBREW_TAP_TOKEN@github.com/Falconiere/homebrew-tap.git" tap
           mkdir -p tap/Formula
-          mv git-better.rb tap/Formula/git-better.rb
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s/{{SHA256}}/$SHA256/g" \
+            packaging/homebrew/git-better.rb.tmpl > tap/Formula/git-better.rb
           cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

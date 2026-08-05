@@ -101,8 +101,13 @@ tests/
 
 ## Conventions
 
-- **No comments in Rust source unless asked.** Config files (`.toml`) may
-  include brief comments. The user is explicit about this.
+- **No inline `//` commentary in Rust source unless asked.** Config files
+  (`.toml`) may include brief comments. The user is explicit about this.
+- **One `///` doc line per public item is required**, not optional: the
+  PostToolUse quality gate rejects any edit that leaves a `pub` item
+  undocumented, so touching an older file means documenting the public items it
+  already had. Keep them to one concise line; the ban above is about explanatory
+  `//` comments inside function bodies, not doc lines.
 - **No emojis in source files or commits unless asked.** They appear in
   *output* (via `icons.rs`), not in source.
 - **No CLAUDE.md / additional agent files** — `AGENTS.md` is the only one.
