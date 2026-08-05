@@ -307,15 +307,15 @@ jobs:
       # (the rest of the file is dist-generated), matching Falconiere/comemory:
       # we mint a short-lived GitHub App installation token scoped to the tap
       # repo instead of a long-lived PAT, so tap pushes stop breaking when a PAT
-      # silently expires. The App behind secrets.APP_ID must be installed on
-      # Falconiere/homebrew-tap with Contents: write — the same App that already
+      # silently expires. The App behind secrets.HOMEBREW_APP_ID must be installed
+      # on Falconiere/homebrew-tap with Contents: write — the same App that already
       # publishes comemory's formula. On a future `dist init`, re-apply this block.
       - name: Mint homebrew-tap token
         id: tap-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ secrets.HOMEBREW_APP_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
           owner: "Falconiere"
           repositories: "homebrew-tap"
       - uses: actions/checkout@v6

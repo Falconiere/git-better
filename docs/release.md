@@ -51,12 +51,13 @@ pipeline, the App-token tap push, the finalize smoke test — matches.
   gh variable set RELEASE_PLZ_ENABLED --body true --repo Falconiere/git-better
   ```
 - [ ] **`Falconiere/homebrew-tap` exists** — already true; it is comemory's tap.
-- [ ] **The homebrew-publish GitHub App** (`APP_ID` + `APP_PRIVATE_KEY` secrets)
-  is installed on `Falconiere/homebrew-tap` with **Contents: read and write**.
-  This is the same App that publishes comemory's formula, so only the two
-  secrets need copying onto this repo:
+- [ ] **The homebrew-publish GitHub App** (`HOMEBREW_APP_ID` +
+  `HOMEBREW_APP_PRIVATE_KEY` secrets) is installed on `Falconiere/homebrew-tap`
+  with **Contents: read and write**. This is the same App that publishes
+  comemory's formula, and Infisical syncs both secrets onto every repo that
+  needs them, so nothing has to be pasted by hand:
   ```bash
-  gh secret list --repo Falconiere/git-better | grep -E 'APP_ID|APP_PRIVATE_KEY'
+  gh secret list --repo Falconiere/git-better | grep -E 'HOMEBREW_APP_ID|HOMEBREW_APP_PRIVATE_KEY'
   ```
   The `publish-homebrew-formula` job mints a short-lived installation token from
   it — no expiring PAT to rotate.
