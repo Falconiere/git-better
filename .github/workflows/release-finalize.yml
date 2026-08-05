@@ -67,4 +67,14 @@ jobs:
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'git-better-aarch64-apple-darwin.tar.xz.sha256' --dir artifacts
           cd artifacts
-          sha256sum --check git-better-aarch64-apple-darwin.tar.xz.sha256
+          # dist's sidecar has held both the bare digest and the standard
+          # "<digest>  <filename>" form across versions, so take the first field
+          # and compare it ourselves rather than assuming `sha256sum --check`
+          # can parse the file.
+          expected="$(cut -d' ' -f1 git-better-aarch64-apple-darwin.tar.xz.sha256)"
+          actual="$(sha256sum git-better-aarch64-apple-darwin.tar.xz | cut -d' ' -f1)"
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::checksum mismatch: sidecar $expected, computed $actual"
+            exit 1
+          fi
+          echo "::notice::checksum OK ($actual)"
