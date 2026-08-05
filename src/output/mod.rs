@@ -1,13 +1,22 @@
 use std::io::IsTerminal;
 
+/// JSON envelope serialization for `--better`.
 pub mod better;
+/// Convention-profile summary printer.
+pub mod conventions_view;
+/// Syntax highlighting via a shared syntect set.
 pub mod highlight;
+/// Pretty printers for the read commands.
 pub mod human;
+/// Unicode icons with an ASCII fallback.
 pub mod icons;
+/// Column padding, rules, and bar charts.
 pub mod layout;
+/// Color palette and color-enable detection.
 pub mod theme;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How a command should render: human text (pretty or flat) or a JSON envelope.
 pub enum OutputMode {
   Human { pretty: bool },
   Better { budget: Option<usize> },
