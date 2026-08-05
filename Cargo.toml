@@ -10,7 +10,14 @@ homepage = "https://github.com/Falconiere/git-better"
 readme = "README.md"
 keywords = ["git", "cli", "llm", "agent", "prettier", "syntect"]
 categories = ["command-line-utilities", "development-tools", "version-control"]
-exclude = ["/.github", "/tests/fixtures", "/.gitignore"]
+exclude = [
+  "/.github",
+  "/tests",
+  "/testkit",
+  "/docs",
+  "/packaging",
+  "/.gitignore",
+]
 
 [lib]
 name = "git_better"
@@ -37,6 +44,7 @@ time = { version = "0.3", features = ["formatting"] }
 tempfile = "3.13"
 assert_cmd = "2.0"
 predicates = "3.1"
+testkit = { path = "testkit" }
 
 [profile.release]
 lto = "thin"

@@ -282,7 +282,7 @@ fn splice(existing: &str, block: &str) -> String {
       format!(
         "{}{block}{}",
         &existing[..start],
-        tail.trim_start_matches('\n')
+        tail.strip_prefix('\n').unwrap_or(tail)
       )
     },
     _ if existing.trim().is_empty() => block.to_string(),
@@ -295,7 +295,9 @@ fn block() -> String {
 }
 
 fn is_ours(existing: &str) -> bool {
-  existing.contains("name: git-better") || existing.contains(BEGIN)
+  existing.starts_with("---\nname: git-better")
+    || existing.starts_with(CURSOR_FRONTMATTER)
+    || existing.contains(BEGIN)
 }
 
 fn write(path: &Path, content: &str, dry_run: bool) -> Result<Outcome> {

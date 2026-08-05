@@ -1,67 +1,8 @@
-use std::path::Path;
-use std::time::{Duration, SystemTime};
-
-use assert_cmd::Command;
 use serde_json::Value;
-use tempfile::TempDir;
 
 mod common;
 
-fn gb(repo: &Path, cache: &Path) -> Command {
-  let mut cmd = Command::cargo_bin("gb").unwrap();
-  cmd.current_dir(repo).env("GB_CACHE_DIR", cache);
-  cmd
-}
-
-fn cache_dir() -> TempDir {
-  tempfile::tempdir().unwrap()
-}
-
-fn better_envelope(repo: &Path, cache: &Path, extra: &[&str]) -> Value {
-  let mut cmd = gb(repo, cache);
-  cmd.args(["conventions", "--better"]).args(extra);
-  let out = cmd.output().unwrap();
-  assert!(out.status.success(), "gb conventions --better failed");
-  serde_json::from_slice(&out.stdout).unwrap()
-}
-
-fn sole_cache_file(cache: &Path) -> std::path::PathBuf {
-  let mut entries: Vec<std::path::PathBuf> = std::fs::read_dir(cache.join("conventions"))
-    .unwrap()
-    .filter_map(Result::ok)
-    .map(|entry| entry.path())
-    .collect();
-  assert_eq!(entries.len(), 1, "expected one cached profile: {entries:?}");
-  entries.pop().unwrap()
-}
-
-fn mtime(path: &Path) -> SystemTime {
-  std::fs::metadata(path).unwrap().modified().unwrap()
-}
-
-fn age_file(path: &Path, by: Duration) {
-  let file = std::fs::File::options().write(true).open(path).unwrap();
-  file.set_modified(SystemTime::now() - by).unwrap();
-}
-
-fn bin_dir_with_git_only() -> TempDir {
-  let dir = tempfile::tempdir().unwrap();
-  let git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
-    .map(|entry| entry.join("git"))
-    .find(|candidate| candidate.is_file())
-    .unwrap();
-  std::os::unix::fs::symlink(git, dir.path().join("git")).unwrap();
-  dir
-}
-
-fn profile_json(repo: &Path, cache: &Path) -> Value {
-  let out = gb(repo, cache)
-    .args(["conventions", "--json"])
-    .output()
-    .unwrap();
-  assert!(out.status.success(), "gb conventions --json failed");
-  serde_json::from_slice(&out.stdout).unwrap()
-}
+use common::conventions::{cache_dir, gb, profile_json};
 
 #[test]
 fn summary_reports_a_conventional_repo() {
@@ -228,75 +169,6 @@ fn json_and_better_together_are_rejected() {
 }
 
 #[test]
-fn second_call_is_served_from_cache() {
-  let repo = common::init_with_pr_trail();
-  let cache = cache_dir();
-
-  let first = gb(repo.path(), cache.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-  let cached_file = sole_cache_file(cache.path());
-  let first_mtime = mtime(&cached_file);
-
-  let second = gb(repo.path(), cache.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-
-  assert_eq!(first.stdout, second.stdout);
-  assert_eq!(
-    first_mtime,
-    mtime(&cached_file),
-    "cache hit must not rewrite the profile"
-  );
-  assert_eq!(
-    better_envelope(repo.path(), cache.path(), &[])["meta"]["cache"],
-    "hit"
-  );
-}
-
-#[test]
-fn refresh_recomputes_and_rewrites_the_cache() {
-  let repo = common::init_with_pr_trail();
-  let cache = cache_dir();
-
-  gb(repo.path(), cache.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-  let cached_file = sole_cache_file(cache.path());
-  let before = mtime(&cached_file);
-
-  std::thread::sleep(std::time::Duration::from_millis(20));
-  let refreshed = better_envelope(repo.path(), cache.path(), &["--refresh"]);
-
-  assert_eq!(refreshed["meta"]["cache"], "miss");
-  assert_ne!(
-    before,
-    mtime(&cached_file),
-    "--refresh must rewrite the profile"
-  );
-}
-
-#[test]
-fn changing_a_declared_file_invalidates_the_cache() {
-  let repo = common::init_repo();
-  std::fs::write(repo.path().join("CONTRIBUTING.md"), "# Contributing\n").unwrap();
-  let cache = cache_dir();
-
-  let before = profile_json(repo.path(), cache.path());
-  std::fs::write(
-    repo.path().join("CONTRIBUTING.md"),
-    "# Contributing\n\nBe kind.\n",
-  )
-  .unwrap();
-  let after = profile_json(repo.path(), cache.path());
-
-  assert_ne!(before["source_hash"], after["source_hash"]);
-}
-
-#[test]
 fn save_prose_persists_rules_and_clears_pending() {
   let repo = common::init_repo();
   std::fs::write(
@@ -333,6 +205,25 @@ fn save_prose_persists_rules_and_clears_pending() {
     later["prose_distilled"]["CONTRIBUTING.md"]["rules"],
     "squash before merge; no merge commits"
   );
+}
+
+#[test]
+fn distilled_prose_is_truncated_to_the_cap() {
+  let repo = common::init_repo();
+  std::fs::write(repo.path().join("CONTRIBUTING.md"), "# Contributing\n").unwrap();
+  let cache = cache_dir();
+
+  let out = gb(repo.path(), cache.path())
+    .args(["conventions", "--save-prose", "CONTRIBUTING.md", "--json"])
+    .write_stdin("x".repeat(9000))
+    .output()
+    .unwrap();
+  let profile: Value = serde_json::from_slice(&out.stdout).unwrap();
+
+  let rules = profile["prose_distilled"]["CONTRIBUTING.md"]["rules"]
+    .as_str()
+    .unwrap();
+  assert_eq!(rules.len(), 8 * 1024);
 }
 
 #[test]
@@ -374,10 +265,65 @@ fn save_prose_rejects_empty_stdin_and_unknown_files() {
 }
 
 #[test]
+fn save_prose_rejects_a_symlink_that_escapes_the_repository() {
+  let repo = common::init_repo();
+  let outside = tempfile::tempdir().unwrap();
+  let secret = outside.path().join("outside.md");
+  std::fs::write(&secret, "not part of the repository\n").unwrap();
+  std::os::unix::fs::symlink(&secret, repo.path().join("linked.md")).unwrap();
+  let cache = cache_dir();
+
+  let out = gb(repo.path(), cache.path())
+    .args(["conventions", "--save-prose", "linked.md"])
+    .write_stdin("rules")
+    .output()
+    .unwrap();
+
+  assert!(
+    !out.status.success(),
+    "a symlink out of the repo must be refused"
+  );
+  assert!(
+    String::from_utf8_lossy(&out.stderr).contains("inside the repository"),
+    "{}",
+    String::from_utf8_lossy(&out.stderr)
+  );
+}
+
+#[test]
+fn save_prose_accepts_a_symlink_that_stays_inside_the_repository() {
+  let repo = common::init_repo();
+  std::fs::write(repo.path().join("CONTRIBUTING.md"), "# Contributing\n").unwrap();
+  std::os::unix::fs::symlink(
+    repo.path().join("CONTRIBUTING.md"),
+    repo.path().join("rules.md"),
+  )
+  .unwrap();
+  let cache = cache_dir();
+
+  let out = gb(repo.path(), cache.path())
+    .args(["conventions", "--save-prose", "rules.md", "--json"])
+    .write_stdin("squash before merge")
+    .output()
+    .unwrap();
+  assert!(
+    out.status.success(),
+    "{}",
+    String::from_utf8_lossy(&out.stderr)
+  );
+
+  let profile: Value = serde_json::from_slice(&out.stdout).unwrap();
+  assert_eq!(
+    profile["prose_distilled"]["CONTRIBUTING.md"]["rules"], "squash before merge",
+    "a symlink inside the repo resolves to its target path"
+  );
+}
+
+#[test]
 fn with_remote_without_gh_on_path_yields_no_titles() {
   let repo = common::init_repo();
   let cache = cache_dir();
-  let bin = bin_dir_with_git_only();
+  let bin = common::conventions::bin_dir_with_git_only();
 
   let out = gb(repo.path(), cache.path())
     .args(["conventions", "--json", "--with-remote"])
@@ -394,127 +340,6 @@ fn with_remote_without_gh_on_path_yields_no_titles() {
   assert_eq!(profile["gh_available"], false);
   assert_eq!(profile["remote_consulted"], true);
   assert_eq!(profile["pr"]["recent_titles"].as_array().unwrap().len(), 0);
-}
-
-#[test]
-fn cache_falls_back_to_xdg_cache_home() {
-  let repo = common::init_repo();
-  let xdg = tempfile::tempdir().unwrap();
-
-  let out = Command::cargo_bin("gb")
-    .unwrap()
-    .current_dir(repo.path())
-    .env_remove("GB_CACHE_DIR")
-    .env("XDG_CACHE_HOME", xdg.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-
-  assert!(out.status.success());
-  let written = std::fs::read_dir(xdg.path().join("git-better").join("conventions"))
-    .unwrap()
-    .filter_map(Result::ok)
-    .count();
-  assert_eq!(written, 1);
-}
-
-#[test]
-fn distilled_prose_is_truncated_to_the_cap() {
-  let repo = common::init_repo();
-  std::fs::write(repo.path().join("CONTRIBUTING.md"), "# Contributing\n").unwrap();
-  let cache = cache_dir();
-
-  let out = gb(repo.path(), cache.path())
-    .args(["conventions", "--save-prose", "CONTRIBUTING.md", "--json"])
-    .write_stdin("x".repeat(9000))
-    .output()
-    .unwrap();
-  let profile: Value = serde_json::from_slice(&out.stdout).unwrap();
-
-  let rules = profile["prose_distilled"]["CONTRIBUTING.md"]["rules"]
-    .as_str()
-    .unwrap();
-  assert_eq!(rules.len(), 8 * 1024);
-}
-
-#[test]
-fn a_cache_entry_older_than_seven_days_is_recomputed() {
-  let repo = common::init_repo();
-  let cache = cache_dir();
-
-  gb(repo.path(), cache.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-  let cached_file = sole_cache_file(cache.path());
-  age_file(&cached_file, Duration::from_secs(8 * 24 * 60 * 60));
-
-  assert_eq!(
-    better_envelope(repo.path(), cache.path(), &[])["meta"]["cache"],
-    "miss"
-  );
-}
-
-#[test]
-fn a_cache_entry_from_another_schema_is_recomputed() {
-  let repo = common::init_repo();
-  let cache = cache_dir();
-
-  gb(repo.path(), cache.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-  let cached_file = sole_cache_file(cache.path());
-  let mut stored: Value =
-    serde_json::from_str(&std::fs::read_to_string(&cached_file).unwrap()).unwrap();
-  stored["schema_version"] = Value::from(99);
-  std::fs::write(&cached_file, stored.to_string()).unwrap();
-
-  assert_eq!(
-    better_envelope(repo.path(), cache.path(), &[])["meta"]["cache"],
-    "miss"
-  );
-  let rewritten: Value =
-    serde_json::from_str(&std::fs::read_to_string(&cached_file).unwrap()).unwrap();
-  assert_eq!(rewritten["schema_version"], 1);
-}
-
-#[test]
-fn a_cache_entry_for_another_repository_is_recomputed() {
-  let repo = common::init_repo();
-  let cache = cache_dir();
-
-  gb(repo.path(), cache.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-  let cached_file = sole_cache_file(cache.path());
-  let mut stored: Value =
-    serde_json::from_str(&std::fs::read_to_string(&cached_file).unwrap()).unwrap();
-  stored["repo_root"] = Value::from("/somewhere/else");
-  std::fs::write(&cached_file, stored.to_string()).unwrap();
-
-  assert_eq!(
-    better_envelope(repo.path(), cache.path(), &[])["meta"]["cache"],
-    "miss"
-  );
-}
-
-#[test]
-fn a_corrupt_cache_entry_is_recomputed_instead_of_failing() {
-  let repo = common::init_repo();
-  let cache = cache_dir();
-
-  gb(repo.path(), cache.path())
-    .args(["conventions", "--plain"])
-    .output()
-    .unwrap();
-  let cached_file = sole_cache_file(cache.path());
-  std::fs::write(&cached_file, "{ not json").unwrap();
-
-  let env = better_envelope(repo.path(), cache.path(), &[]);
-  assert_eq!(env["meta"]["cache"], "miss");
-  assert_eq!(env["data"]["schema_version"], 1);
 }
 
 #[test]

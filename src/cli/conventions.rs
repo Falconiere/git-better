@@ -1,5 +1,5 @@
 use std::io::{IsTerminal, Read};
-use std::path::{Component, Path};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
@@ -61,7 +61,7 @@ fn hints(profile: &Profile) -> Vec<String> {
   let mut hints = Vec::new();
   for file in &profile.prose_pending {
     hints.push(format!(
-      "read {file} once, then persist the rules: printf '%s' \"<rules>\" | gb conventions --save-prose {file}"
+      "read {file} once, distil the rules, then pipe them in: printf '%s' \"$RULES\" | gb conventions --save-prose {file} (where $RULES holds your distilled text)"
     ));
   }
   if profile.commit_format.convention != "conventional-commits" {
@@ -88,21 +88,22 @@ fn read_prose_from_stdin() -> Result<String> {
 }
 
 fn repo_relative(root: &Path, arg: &str) -> Result<String> {
+  let root = root
+    .canonicalize()
+    .map_err(|e| anyhow!("cannot resolve the repository root: {e}"))?;
   let candidate = Path::new(arg);
-  let rel = if candidate.is_absolute() {
-    candidate
-      .strip_prefix(root)
-      .map_err(|_| anyhow!("{arg} is outside the repository"))?
+  let joined = if candidate.is_absolute() {
+    candidate.to_path_buf()
   } else {
-    candidate
+    root.join(candidate)
   };
-  if rel
-    .components()
-    .any(|c| matches!(c, Component::ParentDir | Component::RootDir))
-  {
-    return Err(anyhow!("{arg} must be a path inside the repository"));
-  }
-  if !root.join(rel).is_file() {
+  let resolved = joined
+    .canonicalize()
+    .map_err(|_| anyhow!("no such file in the repository: {arg}"))?;
+  let rel = resolved
+    .strip_prefix(&root)
+    .map_err(|_| anyhow!("{arg} must be a path inside the repository"))?;
+  if !resolved.is_file() {
     return Err(anyhow!("no such file in the repository: {arg}"));
   }
   Ok(rel.display().to_string())

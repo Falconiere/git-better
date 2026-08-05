@@ -323,6 +323,7 @@ dependencies = [
  "syntect",
  "tempfile",
  "terminal_size 0.3.0",
+ "testkit",
  "thiserror 1.0.69",
  "time",
  "unicode-width",
@@ -792,6 +793,15 @@ name = "termtree"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
+
+[[package]]
+name = "testkit"
+version = "0.0.0"
+dependencies = [
+ "assert_cmd",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "thiserror"

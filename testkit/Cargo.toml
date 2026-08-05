@@ -1,0 +1,17 @@
+[package]
+name = "testkit"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Test-only helpers for git-better integration tests"
+license = "MIT"
+publish = false
+
+[lib]
+name = "testkit"
+path = "src/lib.rs"
+
+[dependencies]
+assert_cmd = "2.0"
+serde_json = "1.0"
+tempfile = "3.13"
