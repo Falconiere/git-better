@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::{Duration, SystemTime};
 
 use assert_cmd::Command;
 use serde_json::Value;
@@ -34,8 +35,23 @@ fn sole_cache_file(cache: &Path) -> std::path::PathBuf {
   entries.pop().unwrap()
 }
 
-fn mtime(path: &Path) -> std::time::SystemTime {
+fn mtime(path: &Path) -> SystemTime {
   std::fs::metadata(path).unwrap().modified().unwrap()
+}
+
+fn age_file(path: &Path, by: Duration) {
+  let file = std::fs::File::options().write(true).open(path).unwrap();
+  file.set_modified(SystemTime::now() - by).unwrap();
+}
+
+fn bin_dir_with_git_only() -> TempDir {
+  let dir = tempfile::tempdir().unwrap();
+  let git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+    .map(|entry| entry.join("git"))
+    .find(|candidate| candidate.is_file())
+    .unwrap();
+  std::os::unix::fs::symlink(git, dir.path().join("git")).unwrap();
+  dir
 }
 
 fn profile_json(repo: &Path, cache: &Path) -> Value {
@@ -355,6 +371,150 @@ fn save_prose_rejects_empty_stdin_and_unknown_files() {
     .output()
     .unwrap();
   assert!(!escaping.status.success());
+}
+
+#[test]
+fn with_remote_without_gh_on_path_yields_no_titles() {
+  let repo = common::init_repo();
+  let cache = cache_dir();
+  let bin = bin_dir_with_git_only();
+
+  let out = gb(repo.path(), cache.path())
+    .args(["conventions", "--json", "--with-remote"])
+    .env("PATH", bin.path())
+    .output()
+    .unwrap();
+  assert!(
+    out.status.success(),
+    "{}",
+    String::from_utf8_lossy(&out.stderr)
+  );
+  let profile: Value = serde_json::from_slice(&out.stdout).unwrap();
+
+  assert_eq!(profile["gh_available"], false);
+  assert_eq!(profile["remote_consulted"], true);
+  assert_eq!(profile["pr"]["recent_titles"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn cache_falls_back_to_xdg_cache_home() {
+  let repo = common::init_repo();
+  let xdg = tempfile::tempdir().unwrap();
+
+  let out = Command::cargo_bin("gb")
+    .unwrap()
+    .current_dir(repo.path())
+    .env_remove("GB_CACHE_DIR")
+    .env("XDG_CACHE_HOME", xdg.path())
+    .args(["conventions", "--plain"])
+    .output()
+    .unwrap();
+
+  assert!(out.status.success());
+  let written = std::fs::read_dir(xdg.path().join("git-better").join("conventions"))
+    .unwrap()
+    .filter_map(Result::ok)
+    .count();
+  assert_eq!(written, 1);
+}
+
+#[test]
+fn distilled_prose_is_truncated_to_the_cap() {
+  let repo = common::init_repo();
+  std::fs::write(repo.path().join("CONTRIBUTING.md"), "# Contributing\n").unwrap();
+  let cache = cache_dir();
+
+  let out = gb(repo.path(), cache.path())
+    .args(["conventions", "--save-prose", "CONTRIBUTING.md", "--json"])
+    .write_stdin("x".repeat(9000))
+    .output()
+    .unwrap();
+  let profile: Value = serde_json::from_slice(&out.stdout).unwrap();
+
+  let rules = profile["prose_distilled"]["CONTRIBUTING.md"]["rules"]
+    .as_str()
+    .unwrap();
+  assert_eq!(rules.len(), 8 * 1024);
+}
+
+#[test]
+fn a_cache_entry_older_than_seven_days_is_recomputed() {
+  let repo = common::init_repo();
+  let cache = cache_dir();
+
+  gb(repo.path(), cache.path())
+    .args(["conventions", "--plain"])
+    .output()
+    .unwrap();
+  let cached_file = sole_cache_file(cache.path());
+  age_file(&cached_file, Duration::from_secs(8 * 24 * 60 * 60));
+
+  assert_eq!(
+    better_envelope(repo.path(), cache.path(), &[])["meta"]["cache"],
+    "miss"
+  );
+}
+
+#[test]
+fn a_cache_entry_from_another_schema_is_recomputed() {
+  let repo = common::init_repo();
+  let cache = cache_dir();
+
+  gb(repo.path(), cache.path())
+    .args(["conventions", "--plain"])
+    .output()
+    .unwrap();
+  let cached_file = sole_cache_file(cache.path());
+  let mut stored: Value =
+    serde_json::from_str(&std::fs::read_to_string(&cached_file).unwrap()).unwrap();
+  stored["schema_version"] = Value::from(99);
+  std::fs::write(&cached_file, stored.to_string()).unwrap();
+
+  assert_eq!(
+    better_envelope(repo.path(), cache.path(), &[])["meta"]["cache"],
+    "miss"
+  );
+  let rewritten: Value =
+    serde_json::from_str(&std::fs::read_to_string(&cached_file).unwrap()).unwrap();
+  assert_eq!(rewritten["schema_version"], 1);
+}
+
+#[test]
+fn a_cache_entry_for_another_repository_is_recomputed() {
+  let repo = common::init_repo();
+  let cache = cache_dir();
+
+  gb(repo.path(), cache.path())
+    .args(["conventions", "--plain"])
+    .output()
+    .unwrap();
+  let cached_file = sole_cache_file(cache.path());
+  let mut stored: Value =
+    serde_json::from_str(&std::fs::read_to_string(&cached_file).unwrap()).unwrap();
+  stored["repo_root"] = Value::from("/somewhere/else");
+  std::fs::write(&cached_file, stored.to_string()).unwrap();
+
+  assert_eq!(
+    better_envelope(repo.path(), cache.path(), &[])["meta"]["cache"],
+    "miss"
+  );
+}
+
+#[test]
+fn a_corrupt_cache_entry_is_recomputed_instead_of_failing() {
+  let repo = common::init_repo();
+  let cache = cache_dir();
+
+  gb(repo.path(), cache.path())
+    .args(["conventions", "--plain"])
+    .output()
+    .unwrap();
+  let cached_file = sole_cache_file(cache.path());
+  std::fs::write(&cached_file, "{ not json").unwrap();
+
+  let env = better_envelope(repo.path(), cache.path(), &[]);
+  assert_eq!(env["meta"]["cache"], "miss");
+  assert_eq!(env["data"]["schema_version"], 1);
 }
 
 #[test]

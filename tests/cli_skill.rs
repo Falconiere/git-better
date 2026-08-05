@@ -74,7 +74,16 @@ fn path_lists_every_target() {
   let text = String::from_utf8(out.stdout).unwrap();
 
   assert_eq!(text.lines().count(), 7, "{text}");
-  assert!(text.contains("claude-user\t"), "{text}");
+  assert!(
+    text.contains(&format!(
+      "claude-user\t{}",
+      home
+        .path()
+        .join(".claude/skills/git-better/SKILL.md")
+        .display()
+    )),
+    "{text}"
+  );
   assert!(
     text.contains(&format!(
       "agents-md\t{}",
