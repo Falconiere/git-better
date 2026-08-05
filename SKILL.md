@@ -1,13 +1,14 @@
 ---
 name: git-better
-description: "Token-lean git. Use `gb` (status/diff/log/show/branch/reflog) instead of raw git for reads. Append `--better` for LLM-context JSON. Lean defaults; pass any git flag to override."
+description: "Token-lean git. Use `gb` (status/diff/log/show/branch/reflog) instead of raw git for reads, and run `gb conventions` BEFORE writing a commit/PR/branch so it matches house style. Append `--better` for LLM-context JSON. Lean defaults; pass any git flag to override."
 ---
 
 # git-better — Token-Lean Git Protocol
 
 Raw git burns context two ways: bloated read output (`git diff` dumps
 every hunk incl. lockfiles + color codes) and re-discovering repo
-conventions on every commit. `gb` fixes both. **Always active.**
+conventions (PR template, commit/branch style) on every commit. `gb`
+fixes both. **Always active.**
 
 ## Pillar 1 — lean reads
 
@@ -50,6 +51,50 @@ The JSON envelope is:
 - `meta` carries `duration_ms`, `bytes`, and an optional `budget`.
 - `--budget N` truncates the patch payload to ~`N` approximate tokens
   (chars/4) and sets `data.truncated: true` plus `data.truncated_files[]`.
+
+## Pillar 3 — match house conventions
+
+Before writing a commit message, branch name, or PR, run:
+
+```
+gb conventions            # five-line summary
+gb conventions --json     # raw profile, no envelope
+gb conventions --better   # envelope with next-step hints
+```
+
+It reports `commit_format` (convention, types, scope use, `(#N)` suffix,
+sample subjects), `branch_naming`, the PR template and its sections, and
+release tooling — inferred from declared files *and* git history, because
+most repos declare nothing. The profile is cached per repository and
+recomputed only when a convention file changes or the entry turns 7 days
+old, so repeated calls are effectively free. `--refresh` forces a
+recompute. Follow what it reports.
+
+Detection is local-only. `--with-remote` opts into a single bounded
+`gh pr list` call for recent PR titles; without it `gb` makes no network
+calls.
+
+### Prose conventions (one-time distill)
+
+When the summary lists files under `prose:   pending` (e.g.
+`CONTRIBUTING.md`), read each **once**, distill the actionable rules, and
+persist them so they are never re-read:
+
+```
+printf '%s' "<your distilled rules>" | gb conventions --save-prose CONTRIBUTING.md
+```
+
+The text is read from STDIN and cached against the file's content hash;
+it re-prompts only if the file changes.
+
+## Installing this protocol
+
+`gb skill install` writes this document into the agent config paths it
+detects (Claude Code user + project skills, Cursor, Windsurf, Copilot,
+Codex, `AGENTS.md`). `--dry-run` reports without writing, `--all` installs
+everywhere, `--target <name>` picks one. Shared instruction files get a
+`git-better:begin` / `git-better:end` HTML-comment block that is replaced in
+place, so re-installing never duplicates.
 
 ## Pass-through (do not break muscle memory)
 

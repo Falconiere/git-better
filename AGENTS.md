@@ -24,6 +24,12 @@ prettification and `--better` JSON output.
 - **Git backend**: shell out to the `git` binary. **Never** add `libgit2` /
   `gitoxide` / `nodegit` — the user explicitly chose shell-out.
 - **CLI parsing**: `clap` with the `derive` feature.
+- **Timestamps**: `time` with the `formatting` feature, for the RFC 3339
+  `generated_at` stamp on a convention profile. It is already in the graph via
+  `syntect → plist`. There is **no** async runtime — `tokio` was declared in M0,
+  never used, and removed in v1. Do not add it back.
+- **Hashing**: the FNV-1a helper in `src/conventions/hash.rs`. Cache keys need
+  determinism, not cryptography; do not add a hashing crate.
 - **Syntax highlighting**: `syntect` with `default-fancy` features. Use the
   shared `SyntaxSet` / `ThemeSet` from `src/output/highlight.rs` — never
   re-construct them per call.
@@ -46,6 +52,11 @@ src/
     commit.rs              CommitRecord, CommitGroup types (M1)
     diff.rs                FileStat, Hunk, BudgetDiff types (M1)
     reflog.rs              ReflogEntry (M1)
+  conventions/
+    mod.rs                 Profile + nested types, SCHEMA_VERSION (v1)
+    detect.rs              git + filesystem convention detection (v1)
+    cache.rs               freshness, atomic write, prose merge (v1)
+    hash.rs                FNV-1a 64 digest (v1)
   output/
     mod.rs                 OutputMode enum
     theme.rs               palette + color enable detection
@@ -53,6 +64,7 @@ src/
     icons.rs               ●/◐/⇡/⇣/✨/🐛/📝 + ASCII fallback
     human.rs               pretty printer
     better.rs              JSON envelope serializer
+    conventions_view.rs    five-line convention summary (v1)
     highlight.rs           syntect wrapper (lazy-init static)
   cli/
     mod.rs                 clap Cli enum + dispatch
@@ -62,6 +74,13 @@ src/
     show.rs                (M1)
     branch.rs              (M1)
     reflog.rs              (M1)
+    conventions.rs         (v1) `gb conventions`
+    skill.rs               (v1) `gb skill print|path|install`
+packaging/
+  homebrew/git-better.rb.tmpl  tap formula rendered by the release workflow (v1)
+docs/toolu/
+  specs/v1.md              accepted v1 design spec
+  plans/2026-08-05-v1.md   executed v1 plan + ledger contract
 tests/
   cli_status.rs            (M0)
   output_pretty.rs         (M0)
@@ -74,6 +93,9 @@ tests/
   cli_reflog.rs            (M1)
   cli_passthrough.rs       (M1)
   cli_plain_pipe.rs        (M1)
+  cli_conventions.rs       (v1)
+  conventions_detect_unit.rs (v1)
+  cli_skill.rs             (v1)
   fixtures/                tiny repos for integration tests (gitignored)
 ```
 
@@ -98,12 +120,24 @@ tests/
   `:(exclude)*.sum`, `:(exclude)Cargo.lock`, `:(exclude)package-lock.json`,
   `:(exclude)bun.lock`, `:(exclude)pnpm-lock.yaml`, `:(exclude)yarn.lock`.
   Add new ones in `src/git/proc.rs` (single source of truth).
+- **Convention cache**: `$GB_CACHE_DIR`, else `$XDG_CACHE_HOME/git-better`, else
+  `~/.cache/git-better`, under `conventions/<fnv1a(repo_root)>.json`. Any test
+  that runs `gb conventions` **must** set `GB_CACHE_DIR` to a temp dir. Cache
+  reads and writes are best-effort: a corrupt, foreign, or unwritable cache
+  degrades to compute-and-print and never fails the command.
+- **Convention detection** recognizes 11 conventional-commit types
+  (the 9 tagged ones plus `style` and `revert`) when deciding whether a
+  repository *uses* conventional commits. That is format detection; the tag
+  table in `output/icons.rs` stays at 9.
+- **Versioning**: the CLI surface and the `--better` envelope (with
+  `schema_version` on the convention profile) are the stable `1.x` contract. The
+  Rust library API is internal and may change in any release.
 
 ## Verifying changes
 
 ```bash
 cargo build --release
-cargo test
+cargo nextest run                       # `cargo test` also works
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
@@ -115,7 +149,13 @@ be **< 25 MB**; if a change pushes it over, flag it in the PR description.
 
 - `libgit2` / `gitoxide` / `nodegit`
 - A TUI mode (full-screen curses — that's `lazygit` / `gitui` territory)
-- Network calls inside `gb` itself (no LLM calls, no telemetry)
+- Network calls inside `gb` itself (no LLM calls, no telemetry). The single
+  exception is the opt-in `gb conventions --with-remote`, which shells out to
+  `gh pr list` with a 5-second timeout. It is off by default and must stay so.
 - MCP server (explicitly cut from v0.1)
-- Conventional commit detection beyond the well-known 9 types
+- Write ops (`commit` / `push` / `rebase` / …) with `--better`. They pass through
+  to `git` today; a JSON envelope on a write returns almost no tokens. Deferred
+  past v1.
+- Conventional commit *tags* beyond the well-known 9 types (see the detection
+  note above for the deliberate 11-type exception)
 - x86_64 macOS, Linux, Windows, BSD targets (Apple Silicon only)

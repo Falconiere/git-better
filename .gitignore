@@ -41,3 +41,4 @@ tests/fixtures/*/package-lock.json
 # Agent tooling
 .serena/
 .claude/tmp/
+.claude/toolu.config.json
