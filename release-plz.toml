@@ -1,7 +1,5 @@
-# release-plz owns version + CHANGELOG + tag; dist owns build + Release + tap;
-# crates-io.yml owns the registry publish. See docs/release.md.
-
 [workspace]
+# Ownership split and rationale: docs/release.md.
 # Baseline from git tags, not the registry — works before the crate is published.
 git_only = true
 # Match the `vX.Y.Z` tag history that release.yml / dist consume.
