@@ -7,14 +7,14 @@ use tempfile::TempDir;
 
 /// A `gb` command rooted in `repo` with its convention cache redirected to `cache`.
 pub fn gb(repo: &Path, cache: &Path) -> Command {
-  let mut cmd = Command::cargo_bin("gb").unwrap();
+  let mut cmd = Command::cargo_bin("gb").expect("the gb binary is not built");
   cmd.current_dir(repo).env("GB_CACHE_DIR", cache);
   cmd
 }
 
 /// A throwaway cache directory, so a test never touches the real one.
 pub fn cache_dir() -> TempDir {
-  tempfile::tempdir().unwrap()
+  tempfile::tempdir().expect("cannot create a temporary cache directory")
 }
 
 /// Runs `gb conventions --json` and returns the parsed profile.
@@ -60,11 +60,11 @@ pub fn age_file(path: &Path, by: Duration) {
 
 /// A PATH directory holding only `git`, so `gh` is guaranteed absent.
 pub fn bin_dir_with_git_only() -> TempDir {
-  let dir = tempfile::tempdir().unwrap();
-  let git = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+  let dir = tempfile::tempdir().expect("cannot create a temporary bin directory");
+  let git = std::env::split_paths(&std::env::var_os("PATH").expect("PATH is unset"))
     .map(|entry| entry.join("git"))
     .find(|candidate| candidate.is_file())
-    .unwrap();
-  std::os::unix::fs::symlink(git, dir.path().join("git")).unwrap();
+    .expect("git is not on PATH");
+  std::os::unix::fs::symlink(git, dir.path().join("git")).expect("cannot symlink git");
   dir
 }

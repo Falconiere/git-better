@@ -14,12 +14,12 @@ pub mod conventions;
 
 /// Creates a repository with one commit and one uncommitted file.
 pub fn init_repo() -> TempDir {
-  let dir = tempfile::tempdir().unwrap();
+  let dir = tempfile::tempdir().expect("cannot create a temporary repository directory");
   let init = Command::new("git")
     .args(["init", "-q", "-b", "main"])
     .current_dir(dir.path())
     .status()
-    .unwrap();
+    .expect("git is not on PATH");
   assert!(init.success(), "git init failed");
   for kv in [
     ("user.email", "test@example.com"),
@@ -31,19 +31,19 @@ pub fn init_repo() -> TempDir {
       .args(["config", kv.0, kv.1])
       .current_dir(dir.path())
       .status()
-      .unwrap();
+      .expect("git is not on PATH");
   }
   std::fs::write(dir.path().join("README.md"), "# test\n").unwrap();
   let _ = Command::new("git")
     .args(["add", "README.md"])
     .current_dir(dir.path())
     .status()
-    .unwrap();
+    .expect("git is not on PATH");
   let _ = Command::new("git")
     .args(["commit", "-q", "-m", "init"])
     .current_dir(dir.path())
     .status()
-    .unwrap();
+    .expect("git is not on PATH");
   std::fs::write(dir.path().join("dirty.txt"), "uncommitted\n").unwrap();
   dir
 }
@@ -67,9 +67,9 @@ pub fn git_stdout(args: &[&str], dir: &Path) -> String {
     .args(&full)
     .current_dir(dir)
     .output()
-    .unwrap();
+    .expect("git is not on PATH");
   assert!(out.status.success(), "git invocation failed");
-  String::from_utf8(out.stdout).unwrap()
+  String::from_utf8(out.stdout).expect("git printed invalid UTF-8")
 }
 
 /// Runs `git` in `dir`, ignoring the exit status.
@@ -78,7 +78,7 @@ pub fn run_git(dir: &Path, args: &[&str]) {
     .args(args)
     .current_dir(dir)
     .status()
-    .unwrap();
+    .expect("git is not on PATH");
 }
 
 /// Creates and checks out a branch.
