@@ -1,35 +1,20 @@
-# release-plz configuration.
-#
-# release-plz runs as a Release-PR bot: on each push to `main` it opens/maintains
-# a "release PR" that bumps the version + rewrites CHANGELOG.md from the
-# conventional commits since the last tag. Merging that PR makes release-plz push
-# the `vX.Y.Z` annotated tag — which is the ONLY thing that fires the
-# dist-generated `.github/workflows/release.yml`.
-#
-# Ownership split (same as Falconiere/comemory):
-#   release-plz -> next version + CHANGELOG + git tag
-#   dist        -> build + GitHub Release + Homebrew tap
-#   crates-io.yml -> the crates.io publish (git-better is publishable; comemory is not)
+# release-plz owns version + CHANGELOG + tag; dist owns build + Release + tap;
+# crates-io.yml owns the registry publish. See docs/release.md.
 
 [workspace]
-# Derive the previous version from git tags rather than the registry. Until the
-# first crates.io release exists, a registry lookup returns "not found",
-# release-plz reads that as "already at the Cargo.toml version", and opens no
-# release PR despite unreleased commits. Requires publish != true, which holds:
-# the crates.io publish is owned by crates-io.yml, not release-plz.
+# Baseline from git tags, not the registry — works before the crate is published.
 git_only = true
 # Match the `vX.Y.Z` tag history that release.yml / dist consume.
 git_tag_name = "v{{ version }}"
-# Push the vX.Y.Z tag when the release PR merges. That tag triggers release.yml.
+# The tag pushed on release-PR merge is what fires release.yml.
 git_tag_enable = true
 # dist's `host` job creates the GitHub Release; release-plz must not.
 git_release_enable = false
-# crates-io.yml owns the registry publish, gated on the token being present.
+# crates-io.yml owns the registry publish.
 publish = false
 
 [changelog]
-# Conventional-commit buckets. `gb conventions` reports this repo as
-# conventional-commits, so these map cleanly onto the existing history.
+# Conventional-commit buckets.
 commit_parsers = [
   { message = "^feat", group = "Added" },
   { message = "^fix", group = "Fixed" },

@@ -50,7 +50,7 @@ jobs:
           # the archive is valid, holds the expected binary path, and is a sane
           # size (the release binary alone is ~4 MB).
           tarball=artifacts/git-better-aarch64-apple-darwin.tar.xz
-          size="$(stat -c%s "$tarball" 2>/dev/null || stat -f%z "$tarball")"
+          size="$(stat -c%s "$tarball")"
           if [ "$size" -lt 1048576 ]; then
             echo "::error::tarball is suspiciously small: ${size} bytes"
             exit 1
