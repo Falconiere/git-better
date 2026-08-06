@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2](https://github.com/Falconiere/git-better/compare/v1.0.1...v1.0.2) - 2026-08-06
+
+### CI
+
+- *(release)* ship Linux x86_64 and arm64 alongside macOS arm64
+
 ## [1.0.1](https://github.com/Falconiere/git-better/compare/v1.0.0...v1.0.1) - 2026-08-06
 
 ### Maintenance
