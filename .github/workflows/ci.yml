@@ -12,7 +12,7 @@ env:
 
 jobs:
   test:
-    name: test · ubuntu (CI; release targets aarch64-apple-darwin)
+    name: test · ubuntu x86_64 (a release target; macOS/arm64 are covered by release.yml)
     runs-on: ubuntu-latest
 
     steps:

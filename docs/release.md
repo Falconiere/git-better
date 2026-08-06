@@ -14,10 +14,14 @@ and pushes to the **same Homebrew tap**, `Falconiere/homebrew-tap`.
 
 The release-plz bot (`.github/workflows/release-plz.yml`, config
 `release-plz.toml`) owns **version + CHANGELOG + tag**. dist owns everything
-after the tag: push `vX.Y.Z` → `release.yml` builds `aarch64-apple-darwin` →
-uploads the tarball + shell installer to the GitHub Release → pushes the formula
-to `Falconiere/homebrew-tap` (stable tags only). Two hand-maintained workflows
-follow: `release-finalize.yml` smoke-tests the published artifact, and
+after the tag: push `vX.Y.Z` → `release.yml` builds `aarch64-apple-darwin`,
+`x86_64-unknown-linux-gnu`, and `aarch64-unknown-linux-gnu`, each on its own
+native runner (`macos-14`, `ubuntu-22.04`, `ubuntu-22.04-arm` — nothing
+cross-compiles) → uploads the tarballs + shell installer to the GitHub Release →
+pushes the formula to `Falconiere/homebrew-tap` (stable tags only). The formula
+dist generates covers macOS and Linuxbrew from the same file, and the shell
+installer picks the archive matching the platform it runs on. Two hand-maintained
+workflows follow: `release-finalize.yml` smoke-tests the published artifacts, and
 `crates-io.yml` publishes the crate.
 
 ```
@@ -128,10 +132,17 @@ gh run list --repo Falconiere/git-better --workflow release.yml --limit 3
 gh release view v1.0.0 --repo Falconiere/git-better
 ```
 
-Expect on the release: `git-better-aarch64-apple-darwin.tar.xz` + `.sha256`,
-`git-better-installer.sh`, `sha256.sum`, `source.tar.gz`. Then:
+Expect on the release, each `.tar.xz` with a `.sha256` sidecar:
 
-- `release-finalize.yml` must be green (tarball layout, size, checksum).
+- `git-better-aarch64-apple-darwin.tar.xz`
+- `git-better-x86_64-unknown-linux-gnu.tar.xz`
+- `git-better-aarch64-unknown-linux-gnu.tar.xz`
+
+plus `git-better-installer.sh`, `sha256.sum`, `source.tar.gz`. Then:
+
+- `release-finalize.yml` must be green (every tarball's layout, size and
+  checksum, and the x86_64 Linux binary actually executed — that runner shares
+  its platform, so it is the one artifact CI can run rather than only inspect).
 - `Falconiere/homebrew-tap` must have a new `Formula/git-better.rb` commit.
 - `crates-io.yml` must be green (published, or skipped with a notice).
 
@@ -153,11 +164,20 @@ by `NOTE:` comments — the quality gate in `plan`, and the App-token step in
 `publish-homebrew-formula`. `allow-dirty = ["ci"]` in `Cargo.toml` keeps dist
 from reporting those edits as drift.
 
-After changing `[workspace.metadata.dist]`:
+`allow-dirty = ["ci"]` also makes `dist generate` a **silent no-op** on
+`release.yml` — dist will not rewrite a file it has been told to leave alone, so
+it exits 0 having changed nothing. To regenerate, drop the entry first:
 
 ```bash
-dist init --yes     # or: dist generate
+# 1. set allow-dirty = [] in Cargo.toml
+dist generate
+# 2. re-apply both NOTE: blocks (regeneration deletes them, and reverts the
+#    tap checkout token to secrets.HOMEBREW_TAP_TOKEN)
+# 3. restore allow-dirty = ["ci"]
+dist plan            # verify targets/artifacts
 ```
 
-then **re-apply both `NOTE:` blocks**, since regeneration overwrites them.
-Verify with `dist plan`.
+Adding or removing a target needs **no edit to `release.yml`** — the build
+matrix is computed at run time from the `plan` job's JSON, so changing
+`targets` in `Cargo.toml` is enough. Regeneration is only needed when the dist
+version or the workflow's own shape changes.
