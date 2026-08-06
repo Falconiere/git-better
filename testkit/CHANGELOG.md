@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.1](https://github.com/Falconiere/git-better/compare/v0.0.0...v0.0.1) - 2026-08-06
+
+### Maintenance
+
+- release
+
 ## [0.0.0](https://github.com/Falconiere/git-better/releases/tag/v0.0.0) - 2026-08-06
 
 ### Fixed
