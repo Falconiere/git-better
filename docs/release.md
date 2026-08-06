@@ -42,13 +42,20 @@ pipeline, the App-token tap push, the finalize smoke test — matches.
   does **not** trigger downstream workflows, so the bot must push the tag with
   its own token or `release.yml` never fires. Both release-plz jobs mint a
   short-lived installation token from these secrets — the same pattern the tap
-  push uses, and unlike a PAT it cannot silently expire:
+  push uses, and unlike a PAT it cannot silently expire. Infisical syncs both
+  secrets onto every repo that needs them, so nothing has to be pasted by hand;
+  this is a verification step, not a creation step:
   ```bash
-  gh secret list --repo Falconiere/git-better | grep -E 'APP_ID|APP_PRIVATE_KEY'
+  # anchored: an unanchored APP_ID also matches HOMEBREW_APP_ID, which is a
+  # different App (the tap push) and must be left alone.
+  gh secret list --repo Falconiere/git-better | grep -E '^(APP_ID|APP_PRIVATE_KEY)\b'
   ```
-  If the jobs fail with `403 Resource not accessible`, the App is not installed
-  on this repo (or lacks one of the two permissions) — the secrets existing is
-  not sufficient.
+  If they are missing, add them to the Infisical project rather than setting them
+  per-repo. Installing the App is separate and manual: GitHub → Settings →
+  Developer settings → GitHub Apps → the App → Install App, then grant it this
+  repo with the two permissions above. If the jobs fail with `403 Resource not
+  accessible`, that install is what is missing (or one permission is read-only) —
+  the secrets existing is not sufficient, since the sync is repo-wide.
 - [ ] **Enable the bot.** Both release-plz jobs are gated behind a repo
   **variable** so merging the workflow does not start cutting releases before
   the App is installed. It must be a variable, not a secret: the `vars` context
