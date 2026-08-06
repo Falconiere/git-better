@@ -6,16 +6,20 @@
 #   release-plz-release — on the merged version-bump commit, pushes the vX.Y.Z
 #                         tag (which is what fires release.yml).
 #
-# Both jobs authenticate with RELEASE_PLZ_TOKEN, a fine-grained PAT with
-# Contents: read+write and Pull requests: read+write on this repo. The PAT is
-# REQUIRED on the release job: a tag pushed with the default GITHUB_TOKEN does
-# NOT trigger downstream workflows, so release.yml would never fire. Using the
-# PAT on the release-pr job too means the release PR also triggers CI checks.
+# Both jobs authenticate with a short-lived GitHub App installation token minted
+# from secrets.APP_ID / secrets.APP_PRIVATE_KEY, the same approach release.yml
+# uses for the tap. An App token is REQUIRED on the release job: a tag pushed
+# with the default GITHUB_TOKEN does NOT trigger downstream workflows, so
+# release.yml would never fire. Using it on the release-pr job too means the
+# release PR also triggers CI checks. Unlike a PAT it cannot silently expire.
 #
-# Both jobs are gated behind the `RELEASE_PLZ_ENABLED` repo variable so merging
-# this file does not immediately start cutting releases. Flip it on (Actions →
-# Variables → RELEASE_PLZ_ENABLED=true) only AFTER RELEASE_PLZ_TOKEN exists.
-# See docs/release.md § one-time setup.
+# The App behind secrets.APP_ID must be installed on Falconiere/git-better with
+# Contents: read+write and Pull requests: read+write.
+#
+# Both jobs are gated behind the `RELEASE_PLZ_ENABLED` repo variable — a
+# VARIABLE (Actions → Variables), not a secret: the `vars` context cannot see
+# secrets, so storing it as a secret silently skips both jobs. Flip it on only
+# AFTER the App is installed. See docs/release.md § one-time setup.
 #
 # config: release-plz.toml (git_release_enable=false, publish=false — dist owns
 # build + GitHub Release, crates-io.yml owns the registry publish, release-plz
@@ -43,7 +47,13 @@ jobs:
       group: release-plz-pr-${{ github.ref }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - name: Mint release token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -54,10 +64,10 @@ jobs:
         with:
           command: release-pr
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   # On the merged version bump, push the vX.Y.Z tag (which fires release.yml).
-  # The PAT is mandatory here — see the header note.
+  # The App token is mandatory here — see the header note.
   release-plz-release:
     name: Release-plz release
     if: ${{ vars.RELEASE_PLZ_ENABLED == 'true' }}
@@ -65,7 +75,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Mint release token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -76,4 +92,4 @@ jobs:
         with:
           command: release
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

@@ -36,17 +36,23 @@ pipeline, the App-token tap push, the finalize smoke test — matches.
 
 ## 1. One-time setup
 
-- [ ] **`RELEASE_PLZ_TOKEN` (required).** A tag pushed with the default
-  `GITHUB_TOKEN` does **not** trigger downstream workflows, so the bot must push
-  the tag with its own token or `release.yml` never fires. Create a fine-grained
-  PAT scoped to `Falconiere/git-better` with **Contents: read and write** +
-  **Pull requests: read and write**:
+- [ ] **The release GitHub App** (`APP_ID` + `APP_PRIVATE_KEY` secrets) is
+  installed on `Falconiere/git-better` with **Contents: read and write** +
+  **Pull requests: read and write**. A tag pushed with the default `GITHUB_TOKEN`
+  does **not** trigger downstream workflows, so the bot must push the tag with
+  its own token or `release.yml` never fires. Both release-plz jobs mint a
+  short-lived installation token from these secrets — the same pattern the tap
+  push uses, and unlike a PAT it cannot silently expire:
   ```bash
-  gh secret set RELEASE_PLZ_TOKEN --repo Falconiere/git-better   # paste the PAT
+  gh secret list --repo Falconiere/git-better | grep -E 'APP_ID|APP_PRIVATE_KEY'
   ```
-- [ ] **Enable the bot.** Both release-plz jobs are gated behind a repo variable
-  so merging the workflow does not start cutting releases before the token
-  exists:
+  If the jobs fail with `403 Resource not accessible`, the App is not installed
+  on this repo (or lacks one of the two permissions) — the secrets existing is
+  not sufficient.
+- [ ] **Enable the bot.** Both release-plz jobs are gated behind a repo
+  **variable** so merging the workflow does not start cutting releases before
+  the App is installed. It must be a variable, not a secret: the `vars` context
+  cannot read secrets, so a secret of the same name silently skips both jobs.
   ```bash
   gh variable set RELEASE_PLZ_ENABLED --body true --repo Falconiere/git-better
   ```
