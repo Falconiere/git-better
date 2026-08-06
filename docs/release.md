@@ -60,6 +60,23 @@ pipeline, the App-token tap push, the finalize smoke test — matches.
   `403 Resource not accessible`, that install is what is missing (or a permission
   is read-only) — the secrets existing is not sufficient, since the sync is
   repo-wide while the install is per-repo.
+
+  **Blast radius, accepted knowingly.** A GitHub App has one installation per
+  account, with a single permission grant shared by every repo selected in it. So
+  adding `Pull requests: read and write` for release-plz also exposes that
+  permission on `homebrew-tap` and on comemory, which need only `Contents`. And
+  one leaked private key now reaches this repo's tags and PRs, the tap, and
+  comemory's formula publish, where the previous PAT-plus-separate-App split
+  contained each. Chosen anyway: this App's key material is known-good and
+  already synced, whereas a second App means a second key to install, sync and
+  rotate. Revisit if the tap ever leaves this account.
+- [ ] **The same App is also installed on `Falconiere/homebrew-tap`** — already
+  true; it is the App that publishes comemory's formula, and the tap is comemory's
+  tap. `Contents: read and write` is all the tap push itself needs, though see the
+  note above for what the shared installation actually grants it. The
+  `publish-homebrew-formula` job mints its own token, scoped to the tap via
+  explicit `owner` + `repositories` inputs since it has to cross repos. No
+  expiring PAT to rotate.
 - [ ] **Enable the bot.** Both release-plz jobs are gated behind a repo
   **variable** so merging the workflow does not start cutting releases before
   the App is installed. It must be a variable, not a secret: the `vars` context
@@ -67,12 +84,6 @@ pipeline, the App-token tap push, the finalize smoke test — matches.
   ```bash
   gh variable set RELEASE_PLZ_ENABLED --body true --repo Falconiere/git-better
   ```
-- [ ] **`Falconiere/homebrew-tap` exists** — already true; it is comemory's tap.
-- [ ] **The same App is also installed on `Falconiere/homebrew-tap`** with
-  **Contents: read and write** — it is the App that already publishes comemory's
-  formula, so this half is already true. The `publish-homebrew-formula` job mints
-  its own installation token, scoped to the tap via explicit `owner` +
-  `repositories` inputs since it has to cross repos. No expiring PAT to rotate.
 - [ ] **`CARGO_REGISTRY_TOKEN`** for the crates.io publish. Without it,
   `crates-io.yml` logs a notice and skips rather than failing the release:
   ```bash
