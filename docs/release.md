@@ -36,26 +36,30 @@ pipeline, the App-token tap push, the finalize smoke test — matches.
 
 ## 1. One-time setup
 
-- [ ] **The release GitHub App** (`APP_ID` + `APP_PRIVATE_KEY` secrets) is
-  installed on `Falconiere/git-better` with **Contents: read and write** +
-  **Pull requests: read and write**. A tag pushed with the default `GITHUB_TOKEN`
-  does **not** trigger downstream workflows, so the bot must push the tag with
-  its own token or `release.yml` never fires. Both release-plz jobs mint a
-  short-lived installation token from these secrets — the same pattern the tap
-  push uses, and unlike a PAT it cannot silently expire. Infisical syncs both
-  secrets onto every repo that needs them, so nothing has to be pasted by hand;
-  this is a verification step, not a creation step:
+- [ ] **The publish GitHub App is installed on `Falconiere/git-better`** with
+  **Contents: read and write** + **Pull requests: read and write**. This is the
+  same App as the tap push below (`HOMEBREW_APP_ID` +
+  `HOMEBREW_APP_PRIVATE_KEY`), just installed on a second repo — one App does
+  both jobs. A tag pushed with the default `GITHUB_TOKEN` does **not** trigger
+  downstream workflows, so the bot must push the tag with its own token or
+  `release.yml` never fires; both release-plz jobs mint a short-lived
+  installation token, and unlike a PAT it cannot silently expire. The mint steps
+  pass no `owner`/`repositories`, so each token is scoped to this repo alone even
+  though the App can also reach the tap.
+
+  Infisical syncs both secrets onto every repo that needs them, so nothing has to
+  be pasted by hand — verifying they exist is a separate matter from the App
+  being installed here:
   ```bash
-  # anchored: an unanchored APP_ID also matches HOMEBREW_APP_ID, which is a
-  # different App (the tap push) and must be left alone.
-  gh secret list --repo Falconiere/git-better | grep -E '^(APP_ID|APP_PRIVATE_KEY)\b'
+  gh secret list --repo Falconiere/git-better | grep -E 'HOMEBREW_APP_ID|HOMEBREW_APP_PRIVATE_KEY'
   ```
   If they are missing, add them to the Infisical project rather than setting them
-  per-repo. Installing the App is separate and manual: GitHub → Settings →
-  Developer settings → GitHub Apps → the App → Install App, then grant it this
-  repo with the two permissions above. If the jobs fail with `403 Resource not
-  accessible`, that install is what is missing (or one permission is read-only) —
-  the secrets existing is not sufficient, since the sync is repo-wide.
+  per-repo. Installing the App is manual: GitHub → Settings → Developer settings
+  → GitHub Apps → the App → Install App, then add `git-better` alongside
+  `homebrew-tap` and grant the two permissions above. If the jobs fail with
+  `403 Resource not accessible`, that install is what is missing (or a permission
+  is read-only) — the secrets existing is not sufficient, since the sync is
+  repo-wide while the install is per-repo.
 - [ ] **Enable the bot.** Both release-plz jobs are gated behind a repo
   **variable** so merging the workflow does not start cutting releases before
   the App is installed. It must be a variable, not a secret: the `vars` context
@@ -64,16 +68,11 @@ pipeline, the App-token tap push, the finalize smoke test — matches.
   gh variable set RELEASE_PLZ_ENABLED --body true --repo Falconiere/git-better
   ```
 - [ ] **`Falconiere/homebrew-tap` exists** — already true; it is comemory's tap.
-- [ ] **The homebrew-publish GitHub App** (`HOMEBREW_APP_ID` +
-  `HOMEBREW_APP_PRIVATE_KEY` secrets) is installed on `Falconiere/homebrew-tap`
-  with **Contents: read and write**. This is the same App that publishes
-  comemory's formula, and Infisical syncs both secrets onto every repo that
-  needs them, so nothing has to be pasted by hand:
-  ```bash
-  gh secret list --repo Falconiere/git-better | grep -E 'HOMEBREW_APP_ID|HOMEBREW_APP_PRIVATE_KEY'
-  ```
-  The `publish-homebrew-formula` job mints a short-lived installation token from
-  it — no expiring PAT to rotate.
+- [ ] **The same App is also installed on `Falconiere/homebrew-tap`** with
+  **Contents: read and write** — it is the App that already publishes comemory's
+  formula, so this half is already true. The `publish-homebrew-formula` job mints
+  its own installation token, scoped to the tap via explicit `owner` +
+  `repositories` inputs since it has to cross repos. No expiring PAT to rotate.
 - [ ] **`CARGO_REGISTRY_TOKEN`** for the crates.io publish. Without it,
   `crates-io.yml` logs a notice and skips rather than failing the release:
   ```bash
