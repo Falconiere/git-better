@@ -1,6 +1,7 @@
 # git-better
 
-> Token-lean git companion for humans and LLM agents. **macOS arm64 (Apple Silicon) only.**
+> Token-lean git companion for humans and LLM agents. **macOS arm64 (Apple
+> Silicon), Linux x86_64, Linux arm64.**
 
 `gb` is a drop-in `git` wrapper that:
 
@@ -19,22 +20,34 @@ It is **not** a git replacement — unknown subcommands (`gb remote -v`,
 ## Install
 
 ```bash
-brew install Falconiere/tap/git-better   # Homebrew tap (Apple Silicon)
+brew install Falconiere/tap/git-better   # Homebrew tap (macOS + Linuxbrew)
 cargo install git-better                 # from crates.io
 cargo install --path .                   # from a local clone
 ```
 
-Or the shell installer, which fetches the prebuilt binary:
+Or the shell installer, which detects the platform and fetches the prebuilt
+binary:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
   https://github.com/Falconiere/git-better/releases/latest/download/git-better-installer.sh | sh
 ```
 
-Each tagged release also ships `git-better-aarch64-apple-darwin.tar.xz` with a
-`.sha256` sidecar on the
-[releases page](https://github.com/Falconiere/git-better/releases). Releases are
-cut by release-plz + dist — see [docs/release.md](docs/release.md).
+Each tagged release ships a `.tar.xz` per platform, each with a `.sha256`
+sidecar, on the
+[releases page](https://github.com/Falconiere/git-better/releases):
+
+| Platform | Archive |
+| --- | --- |
+| macOS arm64 | `git-better-aarch64-apple-darwin.tar.xz` |
+| Linux x86_64 | `git-better-x86_64-unknown-linux-gnu.tar.xz` |
+| Linux arm64 | `git-better-aarch64-unknown-linux-gnu.tar.xz` |
+
+The Linux builds are glibc, not musl; the shell installer checks the local glibc
+against the build's floor and refuses cleanly rather than installing a binary
+that cannot run. On an older distro, or on musl, or on an Intel Mac, use
+`cargo install git-better`. Releases are cut by release-plz + dist — see
+[docs/release.md](docs/release.md).
 
 ## Usage
 

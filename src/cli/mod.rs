@@ -7,7 +7,7 @@ use crate::output::OutputMode;
 #[command(
   name = "gb",
   version,
-  about = "Token-lean git companion for humans and LLM agents (macOS only)",
+  about = "Token-lean git companion for humans and LLM agents (macOS arm64, Linux x86_64/arm64)",
   long_about = "Drop-in `git` wrapper. Prettified read commands for humans. \
                   Append `--better` for token-budgeted JSON for LLM agents. \
                   Unknown subcommands forward verbatim to `git`."

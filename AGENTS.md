@@ -15,11 +15,15 @@ prettification and `--better` JSON output.
 - **Language**: Rust 2024 edition, MSRV 1.85 (for `std::sync::LazyLock`).
   `rust-toolchain.toml` pins a newer compiler for local dev/CI; `Cargo.toml`
   `rust-version` is the MSRV gate.
-- **Platform**: **macOS arm64 (Apple Silicon) only** — this is a
-  single-machine personal tool for the user. Release artifacts target
-  `aarch64-apple-darwin`. CI runs on `ubuntu-latest` (cheaper; the
-  binary is a static Rust artifact, no platform-specific syscalls).
-  Do not add x86_64 macOS, Linux, Windows (`*-pc-windows-*`), or BSD
+- **Platform**: **macOS arm64 (Apple Silicon) and Linux x86_64/arm64**. Release
+  artifacts target `aarch64-apple-darwin`, `x86_64-unknown-linux-gnu`, and
+  `aarch64-unknown-linux-gnu`; each Linux target builds on its own native
+  runner, so nothing cross-compiles. The Linux builds are glibc, built on
+  Ubuntu 22.04; dist derives the glibc floor from the built binary's linkage
+  and bakes the check into the shell installer. CI runs on `ubuntu-latest`.
+  Intel macOS is deliberately absent — Apple Silicon only. There are no
+  platform-specific syscalls and no `cfg(target_os)` branches — keep it that
+  way. Do not add x86_64 macOS, Windows (`*-pc-windows-*`), musl, or BSD
   targets without asking.
 - **Git backend**: shell out to the `git` binary. **Never** add `libgit2` /
   `gitoxide` / `nodegit` — the user explicitly chose shell-out.
@@ -174,4 +178,4 @@ be **< 25 MB**; if a change pushes it over, flag it in the PR description.
   past v1.
 - Conventional commit *tags* beyond the well-known 9 types (see the detection
   note above for the deliberate 11-type exception)
-- x86_64 macOS, Linux, Windows, BSD targets (Apple Silicon only)
+- x86_64 macOS, Windows, musl, BSD targets (macOS arm64 + Linux gnu only)
